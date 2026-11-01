@@ -14,7 +14,11 @@ export class WhatsAppSessionManager {
     this.sockets = new Map();
     this.pending = new Set();
     this.cooldowns = new Map();
+    this.reconnectTimers = new Map();
+    this.retryCounts = new Map();
+    this.stopping = false;
     this.logger = pino({ level: process.env.LOG_LEVEL || "info" });
+    this.maxReconnectAttempts = Number(process.env.MAX_RECONNECT_ATTEMPTS || 8);
   }
 
   directory(botId) {
@@ -46,11 +50,132 @@ export class WhatsAppSessionManager {
   async status(botId) {
     const record = this.sockets.get(botId);
     if (record?.connected) return { status: "connected" };
-    if (record?.pairingCode) return { status: "pairing" };
+    if (record?.pairingCode) return { status: "pairing", pairingCode: record.pairingCode };
     const { data, error } = await this.supabase.from("bot_sessions")
       .select("status,last_seen_at,paired_at").eq("bot_instance_id", botId).maybeSingle();
     if (error) throw new Error("Could not read WhatsApp session status");
     return { status: data?.status || "not_connected", lastSeenAt: data?.last_seen_at || null, pairedAt: data?.paired_at || null };
+  }
+
+  async createSocket(bot, { pairing = false } = {}) {
+    if (this.stopping) throw new Error("Runtime is shutting down");
+    if (this.sockets.has(bot.id)) throw new Error("A WhatsApp session is already running for this bot");
+    const store = new EncryptedAuthStore({ directory: this.directory(bot.id), encryptionKey: this.encryptionKey });
+    const { state, saveCreds } = await store.load();
+    if (!pairing && !state.creds.registered) {
+      this.logger.warn({ botId: bot.id }, "Skipping session without registered WhatsApp credentials");
+      return null;
+    }
+    const { version } = await fetchLatestBaileysVersion();
+    const socket = makeWASocket({
+      version,
+      auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, this.logger) },
+      logger: this.logger,
+      printQRInTerminal: false,
+      browser: ["CASTRO X MD", "Chrome", "1.0.0"],
+      generateHighQualityLinkPreview: false,
+      markOnlineOnConnect: false
+    });
+    const record = { socket, connected: false, pairingCode: null, intentionalClose: false, bot };
+    this.sockets.set(bot.id, record);
+    attachCommandHandlers({ socket, bot });
+    socket.ev.on("creds.update", saveCreds);
+    socket.ev.on("connection.update", async update => {
+      try {
+        if (this.sockets.get(bot.id) !== record) return;
+        if (update.connection === "open") {
+          record.connected = true;
+          record.pairingCode = null;
+          this.retryCounts.delete(bot.id);
+          this.clearReconnect(bot.id);
+          await this.persistStatus(bot, "connected", true);
+          this.logger.info({ botId: bot.id }, "WhatsApp session connected");
+        }
+        if (update.connection === "close") {
+          record.connected = false;
+          if (this.sockets.get(bot.id) === record) this.sockets.delete(bot.id);
+          if (record.intentionalClose || this.stopping) return;
+          const code = update.lastDisconnect?.error?.output?.statusCode;
+          if (code === DisconnectReason.loggedOut) {
+            this.clearReconnect(bot.id);
+            this.retryCounts.delete(bot.id);
+            await fs.rm(this.directory(bot.id), { recursive: true, force: true });
+            await this.persistStatus(bot, "revoked", false, "disconnected");
+            this.logger.warn({ botId: bot.id }, "WhatsApp session logged out; credentials cleared");
+          } else {
+            await this.persistStatus(bot, "disconnected");
+            this.scheduleReconnect(bot);
+          }
+        }
+      } catch (error) {
+        this.logger.error({ err: error, botId: bot.id }, "WhatsApp connection event failed");
+      }
+    });
+    return record;
+  }
+
+  clearReconnect(botId) {
+    const timer = this.reconnectTimers.get(botId);
+    if (timer) clearTimeout(timer);
+    this.reconnectTimers.delete(botId);
+  }
+
+  scheduleReconnect(bot) {
+    if (this.stopping || this.reconnectTimers.has(bot.id) || this.pending.has(bot.id)) return;
+    const attempt = (this.retryCounts.get(bot.id) || 0) + 1;
+    if (attempt > this.maxReconnectAttempts) {
+      this.logger.error({ botId: bot.id, attempts: this.maxReconnectAttempts }, "WhatsApp reconnect limit reached");
+      return;
+    }
+    this.retryCounts.set(bot.id, attempt);
+    const base = Math.min(30_000 * (2 ** (attempt - 1)), 15 * 60_000);
+    const delay = Math.round(base * (0.75 + Math.random() * 0.5));
+    const timer = setTimeout(async () => {
+      this.reconnectTimers.delete(bot.id);
+      if (this.stopping || this.sockets.has(bot.id) || this.pending.has(bot.id)) return;
+      this.pending.add(bot.id);
+      try {
+        const record = await this.createSocket(bot);
+        if (!record) {
+          this.retryCounts.delete(bot.id);
+          return;
+        }
+      } catch (error) {
+        this.logger.warn({ err: error, botId: bot.id, attempt }, "WhatsApp reconnect attempt failed");
+        this.scheduleReconnect(bot);
+      } finally {
+        this.pending.delete(bot.id);
+      }
+    }, delay);
+    timer.unref?.();
+    this.reconnectTimers.set(bot.id, timer);
+    this.logger.info({ botId: bot.id, attempt, delayMs: delay }, "Scheduled WhatsApp reconnect");
+  }
+
+  async start() {
+    await fs.mkdir(this.sessionDir, { recursive: true, mode: 0o700 });
+    const { data: sessions, error: sessionError } = await this.supabase.from("bot_sessions")
+      .select("bot_instance_id,owner_id,status")
+      .eq("status", "connected");
+    if (sessionError) throw new Error(`Could not load persisted WhatsApp sessions: ${sessionError.message}`);
+    if (!sessions?.length) return { restored: 0 };
+    const ids = sessions.map(row => row.bot_instance_id);
+    const { data: bots, error: botError } = await this.supabase.from("bot_instances")
+      .select("id,owner_id,bot_name,status,prefix,mode")
+      .in("id", ids).eq("status", "connected");
+    if (botError) throw new Error(`Could not load bots for session restoration: ${botError.message}`);
+    let restored = 0;
+    for (const bot of bots || []) {
+      if (!sessions.some(row => row.bot_instance_id === bot.id && row.owner_id === bot.owner_id)) continue;
+      try {
+        const record = await this.createSocket(bot);
+        if (record) restored++;
+      } catch (error) {
+        this.logger.error({ err: error, botId: bot.id }, "Could not restore WhatsApp session");
+        this.scheduleReconnect(bot);
+      }
+    }
+    return { restored };
   }
 
   async requestPairingCode(bot, phone) {
@@ -60,62 +185,26 @@ export class WhatsAppSessionManager {
     const now = Date.now();
     const waitUntil = this.cooldowns.get(bot.id) || 0;
     if (now < waitUntil) throw new Error(`Please wait ${Math.ceil((waitUntil - now) / 1000)} seconds before requesting another code`);
-
     this.pending.add(bot.id);
     this.cooldowns.set(bot.id, now + Number(process.env.PAIRING_COOLDOWN_SECONDS || 60) * 1000);
-    let socket;
     try {
       await fs.mkdir(this.sessionDir, { recursive: true, mode: 0o700 });
       const store = new EncryptedAuthStore({ directory: this.directory(bot.id), encryptionKey: this.encryptionKey });
-      const { state, saveCreds } = await store.load();
-      if (state.creds.registered) {
-        throw new Error("This bot already has a paired WhatsApp session. Reconnect support must be enabled before requesting a new code.");
-      }
-      const { version } = await fetchLatestBaileysVersion();
-      socket = makeWASocket({
-        version,
-        auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, this.logger) },
-        logger: this.logger,
-        printQRInTerminal: false,
-        browser: ["CASTRO X MD", "Chrome", "1.0.0"],
-        generateHighQualityLinkPreview: false,
-        markOnlineOnConnect: false
-      });
-      const record = { socket, connected: false, pairingCode: null, intentionalClose: false };
-      this.sockets.set(bot.id, record);
-      attachCommandHandlers({ socket, bot });
-      socket.ev.on("creds.update", saveCreds);
-      socket.ev.on("connection.update", async update => {
-        try {
-          if (update.connection === "open") {
-            record.connected = true;
-            record.pairingCode = null;
-            await this.persistStatus(bot, "connected", true);
-          }
-          if (update.connection === "close") {
-            record.connected = false;
-            if (this.sockets.get(bot.id) === record) this.sockets.delete(bot.id);
-            const code = update.lastDisconnect?.error?.output?.statusCode;
-            if (code === DisconnectReason.loggedOut) {
-              await fs.rm(this.directory(bot.id), { recursive: true, force: true });
-              await this.persistStatus(bot, "revoked", false, "disconnected");
-            } else {
-              await this.persistStatus(bot, "disconnected");
-            }
-          }
-        } catch (error) {
-          this.logger.error({ err: error, botId: bot.id }, "Failed to persist WhatsApp connection state");
-        }
-      });
-
-      const code = await socket.requestPairingCode(phone.replace(/\D/g, ""));
+      const { state } = await store.load();
+      if (state.creds.registered) throw new Error("This bot already has a paired WhatsApp session. Use reconnect or disconnect instead of requesting another code.");
+      const record = await this.createSocket(bot, { pairing: true });
+      if (!record) throw new Error("Could not initialize WhatsApp pairing");
+      const code = await record.socket.requestPairingCode(phone.replace(/\D/g, ""));
       record.pairingCode = code;
       await this.persistStatus(bot, "pairing");
       return { status: "pairing", code };
     } catch (error) {
       const record = this.sockets.get(bot.id);
-      if (record?.socket === socket) this.sockets.delete(bot.id);
-      if (socket) socket.end(error);
+      if (record) {
+        record.intentionalClose = true;
+        this.sockets.delete(bot.id);
+        try { record.socket.end(error); } catch {}
+      }
       throw error;
     } finally {
       this.pending.delete(bot.id);
@@ -123,21 +212,27 @@ export class WhatsAppSessionManager {
   }
 
   async disconnect(bot) {
+    this.clearReconnect(bot.id);
+    this.retryCounts.delete(bot.id);
     const record = this.sockets.get(bot.id);
     if (record) {
-      this.sockets.delete(bot.id);
       record.intentionalClose = true;
-      record.socket.end(undefined);
+      this.sockets.delete(bot.id);
+      try { record.socket.end(undefined); } catch {}
     }
     await this.persistStatus(bot, "disconnected");
     return { ok: true, status: "disconnected" };
   }
 
   async shutdown() {
+    this.stopping = true;
+    for (const botId of this.reconnectTimers.keys()) this.clearReconnect(botId);
+    const closing = [];
     for (const [botId, record] of this.sockets) {
-      this.sockets.delete(botId);
       record.intentionalClose = true;
-      try { record.socket.end(undefined); } catch {}
+      this.sockets.delete(botId);
+      try { closing.push(Promise.resolve(record.socket.end(undefined))); } catch {}
     }
+    await Promise.allSettled(closing);
   }
 }
