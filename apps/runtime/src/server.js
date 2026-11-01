@@ -75,6 +75,13 @@ app.post("/api/bots/:botId/pair", authenticate, pairLimiter, ownedBot, async (re
     res.status(400).json({ error: error.message || "Pairing request failed" });
   }
 });
+app.post("/api/bots/:botId/reconnect", authenticate, ownedBot, async (req, res) => {
+  try {
+    res.json(await sessions.reconnect(req.bot));
+  } catch (error) {
+    res.status(400).json({ error: error.message || "Reconnect request failed" });
+  }
+});
 app.post("/api/bots/:botId/disconnect", authenticate, ownedBot, async (req, res) => {
   const result = await sessions.disconnect(req.bot);
   res.json(result);
