@@ -18,7 +18,10 @@ export class WhatsAppSessionManager {
     this.retryCounts = new Map();
     this.stopping = false;
     this.logger = pino({ level: process.env.LOG_LEVEL || "info" });
-    this.maxReconnectAttempts = Number(process.env.MAX_RECONNECT_ATTEMPTS || 8);
+    const configuredAttempts = Number(process.env.MAX_RECONNECT_ATTEMPTS || 8);
+    this.maxReconnectAttempts = Number.isInteger(configuredAttempts)
+      ? Math.min(20, Math.max(1, configuredAttempts))
+      : 8;
   }
 
   directory(botId) {
@@ -194,7 +197,11 @@ export class WhatsAppSessionManager {
     const waitUntil = this.cooldowns.get(bot.id) || 0;
     if (now < waitUntil) throw new Error(`Please wait ${Math.ceil((waitUntil - now) / 1000)} seconds before requesting another code`);
     this.pending.add(bot.id);
-    this.cooldowns.set(bot.id, now + Number(process.env.PAIRING_COOLDOWN_SECONDS || 60) * 1000);
+    const configuredCooldown = Number(process.env.PAIRING_COOLDOWN_SECONDS || 60);
+    const cooldownSeconds = Number.isFinite(configuredCooldown)
+      ? Math.min(3600, Math.max(30, Math.floor(configuredCooldown)))
+      : 60;
+    this.cooldowns.set(bot.id, now + cooldownSeconds * 1000);
     try {
       await fs.mkdir(this.sessionDir, { recursive: true, mode: 0o700 });
       const store = new EncryptedAuthStore({ directory: this.directory(bot.id), encryptionKey: this.encryptionKey });
