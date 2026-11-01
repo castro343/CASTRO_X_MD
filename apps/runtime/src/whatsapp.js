@@ -223,9 +223,9 @@ export class WhatsAppSessionManager {
       const store = new EncryptedAuthStore({ directory: this.directory(bot.id), encryptionKey: this.encryptionKey });
       const { state } = await store.load();
       if (!state.creds.registered) throw new Error("No paired WhatsApp credentials found. Pair this bot first.");
+      await this.persistStatus(bot, "disconnected", false, "disconnected", true);
       const record = await this.createSocket(bot);
       if (!record) throw new Error("Could not start the WhatsApp session");
-      await this.persistStatus(bot, "disconnected", false, "disconnected", true);
       return { ok: true, status: "connecting" };
     } finally {
       this.pending.delete(bot.id);
