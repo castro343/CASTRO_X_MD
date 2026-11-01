@@ -8,7 +8,7 @@ import { WhatsAppSessionManager } from "./whatsapp.js";
 
 const required = ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "SESSION_ENCRYPTION_KEY"];
 for (const key of required) if (!process.env[key]) throw new Error(`Missing required environment variable: ${key}`);
-if (process.env.SESSION_ENCRYPTION_KEY.length < 32) throw new Error("SESSION_ENCRYPTION_KEY must contain at least 32 characters");
+if (Buffer.byteLength(process.env.SESSION_ENCRYPTION_KEY, "utf8") < 32) throw new Error("SESSION_ENCRYPTION_KEY must contain at least 32 bytes");
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false }
@@ -22,6 +22,7 @@ const sessions = new WhatsAppSessionManager({
 app.disable("x-powered-by");
 app.use(helmet());
 app.use(express.json({ limit: "32kb" }));
+app.use(rateLimit({ windowMs: 60_000, limit: 120, standardHeaders: "draft-8", legacyHeaders: false }));
 
 const allowedOrigins = new Set((process.env.DASHBOARD_ORIGINS || "").split(",").map(x => x.trim()).filter(Boolean));
 app.use((req, res, next) => {
@@ -52,8 +53,8 @@ async function authenticate(req, res, next) {
 
 async function ownedBot(req, res, next) {
   const { data, error } = await supabase.from("bot_instances")
-    .select("id,user_id,name,status,prefix")
-    .eq("id", req.params.botId).eq("user_id", req.user.id).maybeSingle();
+    .select("id,owner_id,bot_name,status,prefix,mode")
+    .eq("id", req.params.botId).eq("owner_id", req.user.id).maybeSingle();
   if (error) return res.status(503).json({ error: "Could not verify bot ownership" });
   if (!data) return res.status(404).json({ error: "Bot not found" });
   req.bot = data;
@@ -62,6 +63,11 @@ async function ownedBot(req, res, next) {
 
 const pairLimiter = rateLimit({ windowMs: 60_000, limit: 5, standardHeaders: "draft-8", legacyHeaders: false });
 app.get("/health", (_req, res) => res.json({ ok: true, service: "castro-x-md-runtime", whatsapp: "integrated" }));
+app.get("/ready", async (_req, res) => {
+  const { error } = await supabase.from("bot_instances").select("id").limit(1);
+  if (error) return res.status(503).json({ ok: false, database: "unavailable" });
+  res.json({ ok: true, database: "available" });
+});
 app.get("/api/bots/:botId/status", authenticate, ownedBot, async (req, res) => {
   res.json(await sessions.status(req.bot.id));
 });
@@ -81,9 +87,12 @@ app.post("/api/bots/:botId/disconnect", authenticate, ownedBot, async (req, res)
 
 const port = Number(process.env.PORT || 8080);
 const server = app.listen(port, () => console.log(`CASTRO X MD runtime listening on ${port}`));
+let stopping = false;
 async function shutdown() {
-  server.close();
+  if (stopping) return;
+  stopping = true;
   await sessions.shutdown();
+  await new Promise(resolve => server.close(resolve));
   process.exit(0);
 }
 process.on("SIGTERM", shutdown);
