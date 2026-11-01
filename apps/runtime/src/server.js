@@ -72,19 +72,26 @@ app.post("/api/bots/:botId/pair", authenticate, pairLimiter, ownedBot, async (re
   try {
     res.json(await sessions.requestPairingCode(req.bot, parsed.data.phone));
   } catch (error) {
-    res.status(400).json({ error: error.message || "Pairing request failed" });
+    console.warn("WhatsApp pairing request failed:", error);
+    res.status(400).json({ error: "Pairing request failed. Check the phone number and session state, then try again." });
   }
 });
 app.post("/api/bots/:botId/reconnect", authenticate, ownedBot, async (req, res) => {
   try {
     res.json(await sessions.reconnect(req.bot));
   } catch (error) {
-    res.status(400).json({ error: error.message || "Reconnect request failed" });
+    console.warn("WhatsApp reconnect request failed:", error);
+    res.status(400).json({ error: "Reconnect request failed. Check the session state and try again." });
   }
 });
 app.post("/api/bots/:botId/disconnect", authenticate, ownedBot, async (req, res) => {
-  const result = await sessions.disconnect(req.bot);
-  res.json(result);
+  try {
+    const result = await sessions.disconnect(req.bot);
+    res.json(result);
+  } catch (error) {
+    console.warn("WhatsApp disconnect request failed:", error);
+    res.status(409).json({ error: "Disconnect could not be completed. Wait for any active operation to finish, then try again." });
+  }
 });
 
 let runtimeReady = false;
