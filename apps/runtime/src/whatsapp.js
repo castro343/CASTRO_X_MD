@@ -25,7 +25,7 @@ export class WhatsAppSessionManager {
     return crypto.createHash("sha256").update(`castro-x-md:${botId}`).digest("hex");
   }
 
-  async persistStatus(bot, status, paired = false) {
+  async persistStatus(bot, status, paired = false, botStatus = status) {
     const now = new Date().toISOString();
     const session = {
       bot_instance_id: bot.id,
@@ -39,7 +39,7 @@ export class WhatsAppSessionManager {
       .upsert(session, { onConflict: "bot_instance_id" });
     if (sessionError) throw new Error(`Could not persist WhatsApp session state: ${sessionError.message}`);
     const { error: botError } = await this.supabase.from("bot_instances")
-      .update({ status }).eq("id", bot.id).eq("owner_id", bot.owner_id);
+      .update({ status: botStatus }).eq("id", bot.id).eq("owner_id", bot.owner_id);
     if (botError) throw new Error(`Could not update bot status: ${botError.message}`);
   }
 
@@ -98,7 +98,7 @@ export class WhatsAppSessionManager {
             const code = update.lastDisconnect?.error?.output?.statusCode;
             if (code === DisconnectReason.loggedOut) {
               await fs.rm(this.directory(bot.id), { recursive: true, force: true });
-              await this.persistStatus(bot, "revoked");
+              await this.persistStatus(bot, "revoked", false, "disconnected");
             } else {
               await this.persistStatus(bot, "disconnected");
             }
