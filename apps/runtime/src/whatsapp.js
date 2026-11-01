@@ -29,13 +29,14 @@ export class WhatsAppSessionManager {
     return crypto.createHash("sha256").update(`castro-x-md:${botId}`).digest("hex");
   }
 
-  async persistStatus(bot, status, paired = false, botStatus = status) {
+  async persistStatus(bot, status, paired = false, botStatus = status, reconnectEnabled = true) {
     const now = new Date().toISOString();
     const session = {
       bot_instance_id: bot.id,
       owner_id: bot.owner_id,
       runtime_session_ref: this.runtimeRef(bot.id),
       status,
+      reconnect_enabled: reconnectEnabled,
       last_seen_at: now,
       ...(paired ? { paired_at: now } : {})
     };
@@ -103,7 +104,7 @@ export class WhatsAppSessionManager {
             await this.persistStatus(bot, "revoked", false, "disconnected");
             this.logger.warn({ botId: bot.id }, "WhatsApp session logged out; credentials cleared");
           } else {
-            await this.persistStatus(bot, "disconnected");
+            await this.persistStatus(bot, "disconnected", false, "disconnected", true);
             if (record.creds.registered) this.scheduleReconnect(bot);
           }
         }
@@ -154,14 +155,14 @@ export class WhatsAppSessionManager {
   async start() {
     await fs.mkdir(this.sessionDir, { recursive: true, mode: 0o700 });
     const { data: sessions, error: sessionError } = await this.supabase.from("bot_sessions")
-      .select("bot_instance_id,owner_id,status")
-      .eq("status", "connected");
+      .select("bot_instance_id,owner_id,status,reconnect_enabled")
+      .in("status", ["connected", "disconnected"]).eq("reconnect_enabled", true);
     if (sessionError) throw new Error(`Could not load persisted WhatsApp sessions: ${sessionError.message}`);
     if (!sessions?.length) return { restored: 0 };
     const ids = sessions.map(row => row.bot_instance_id);
     const { data: bots, error: botError } = await this.supabase.from("bot_instances")
       .select("id,owner_id,bot_name,status,prefix,mode")
-      .in("id", ids).eq("status", "connected");
+      .in("id", ids).in("status", ["connected", "disconnected"]);
     if (botError) throw new Error(`Could not load bots for session restoration: ${botError.message}`);
     let restored = 0;
     for (const bot of bots || []) {
@@ -195,7 +196,7 @@ export class WhatsAppSessionManager {
       if (!record) throw new Error("Could not initialize WhatsApp pairing");
       const code = await record.socket.requestPairingCode(phone.replace(/\D/g, ""));
       record.pairingCode = code;
-      await this.persistStatus(bot, "pairing");
+      await this.persistStatus(bot, "pairing", false, "pairing", true);
       return { status: "pairing", code };
     } catch (error) {
       const record = this.sockets.get(bot.id);
@@ -219,7 +220,7 @@ export class WhatsAppSessionManager {
       this.sockets.delete(bot.id);
       try { record.socket.end(undefined); } catch {}
     }
-    await this.persistStatus(bot, "disconnected");
+    await this.persistStatus(bot, "disconnected", false, "disconnected", false);
     return { ok: true, status: "disconnected" };
   }
 
