@@ -1,14 +1,16 @@
-name: Runtime CI
+name: Runtime and Dashboard CI
 
 on:
   push:
     branches: [main, castro-x-md-foundation]
     paths:
       - "apps/runtime/**"
+      - "apps/dashboard/**"
       - ".github/workflows/runtime-ci.yml"
   pull_request:
     paths:
       - "apps/runtime/**"
+      - "apps/dashboard/**"
       - ".github/workflows/runtime-ci.yml"
 
 permissions:
@@ -33,3 +35,18 @@ jobs:
         run: npm test
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
+
+  dashboard:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/dashboard
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dashboard dependencies
+        run: npm install --ignore-scripts
+      - name: Build dashboard
+        run: npm run build
