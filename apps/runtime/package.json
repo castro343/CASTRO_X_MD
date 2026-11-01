@@ -1,0 +1,25 @@
+{
+  "name": "castro-x-md-runtime",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Isolated multi-user WhatsApp runtime for CASTRO X MD",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "check": "node --check src/server.js && node --check src/whatsapp.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.57.4",
+    "@whiskeysockets/baileys": "7.0.0-rc14",
+    "dotenv": "16.6.1",
+    "express": "5.1.0",
+    "express-rate-limit": "8.1.0",
+    "helmet": "8.1.0",
+    "pino": "9.7.0",
+    "zod": "4.1.5"
+  },
+  "devDependencies": {}
+}
