@@ -1,5 +1,9 @@
 const runtimeBase = String(import.meta.env?.VITE_RUNTIME_API_URL || window.CASTRO_X_MD_RUNTIME_URL || "").replace(/\/$/, "");
 
+export function isRuntimeConfigured() {
+  return Boolean(runtimeBase);
+}
+
 function requireRuntime() {
   if (!runtimeBase) throw new Error("Runtime API URL is not configured yet.");
   return runtimeBase;
