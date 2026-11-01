@@ -105,7 +105,10 @@ export class WhatsAppSessionManager {
             this.logger.warn({ botId: bot.id }, "WhatsApp session logged out; credentials cleared");
           } else {
             await this.persistStatus(bot, "disconnected", false, "disconnected", true);
-            if (record.creds.registered) this.scheduleReconnect(bot);
+            if (record.creds.registered) {
+              const retryTimer = setTimeout(() => this.scheduleReconnect(bot), 0);
+              retryTimer.unref?.();
+            }
           }
         }
       } catch (error) {
