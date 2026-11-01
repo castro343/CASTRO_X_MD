@@ -80,7 +80,11 @@ export class WhatsAppSessionManager {
     const record = { socket, connected: false, pairingCode: null, intentionalClose: false, bot, creds: state.creds };
     this.sockets.set(bot.id, record);
     attachCommandHandlers({ socket, bot });
-    socket.ev.on("creds.update", async () => { await saveCreds(); });
+    socket.ev.on("creds.update", () => {
+      saveCreds().catch(error => {
+        this.logger.error({ err: error, botId: bot.id }, "Could not persist encrypted WhatsApp credentials");
+      });
+    });
     socket.ev.on("connection.update", async update => {
       try {
         if (this.sockets.get(bot.id) !== record) return;
