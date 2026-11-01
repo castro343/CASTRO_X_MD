@@ -9,7 +9,7 @@
   },
   "scripts": {
     "start": "node src/server.js",
-    "check": "node --check src/server.js && node --check src/whatsapp.js"
+    "check": "node --check src/server.js && node --check src/whatsapp.js && node --check src/encrypted-auth-store.js && node --check src/commands.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.57.4",
