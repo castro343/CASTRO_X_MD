@@ -236,6 +236,9 @@ export class WhatsAppSessionManager {
   }
 
   async disconnect(bot) {
+    if (this.pending.has(bot.id)) {
+      throw new Error("This bot is still starting or pairing. Wait for that operation to finish, then disconnect it.");
+    }
     this.clearReconnect(bot.id);
     this.retryCounts.delete(bot.id);
     const record = this.sockets.get(bot.id);
