@@ -81,8 +81,8 @@ app.post("/api/bots/:botId/pair", authenticate, pairLimiter, ownedBot, async (re
   }
 });
 app.post("/api/bots/:botId/disconnect", authenticate, ownedBot, async (req, res) => {
-  await sessions.disconnect(req.bot.id);
-  res.json({ ok: true, status: "disconnected" });
+  const result = await sessions.disconnect(req.bot);
+  res.json(result);
 });
 
 const port = Number(process.env.PORT || 8080);
