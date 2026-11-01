@@ -211,6 +211,27 @@ export class WhatsAppSessionManager {
     }
   }
 
+  async reconnect(bot) {
+    if (this.stopping) throw new Error("Runtime is shutting down");
+    if (this.sockets.get(bot.id)?.connected) return { ok: true, status: "connected" };
+    if (this.sockets.has(bot.id) || this.pending.has(bot.id)) {
+      throw new Error("This bot is already connecting");
+    }
+    this.pending.add(bot.id);
+    this.clearReconnect(bot.id);
+    try {
+      const store = new EncryptedAuthStore({ directory: this.directory(bot.id), encryptionKey: this.encryptionKey });
+      const { state } = await store.load();
+      if (!state.creds.registered) throw new Error("No paired WhatsApp credentials found. Pair this bot first.");
+      const record = await this.createSocket(bot);
+      if (!record) throw new Error("Could not start the WhatsApp session");
+      await this.persistStatus(bot, "disconnected", false, "disconnected", true);
+      return { ok: true, status: "connecting" };
+    } finally {
+      this.pending.delete(bot.id);
+    }
+  }
+
   async disconnect(bot) {
     this.clearReconnect(bot.id);
     this.retryCounts.delete(bot.id);
