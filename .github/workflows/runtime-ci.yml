@@ -1,0 +1,35 @@
+name: Runtime CI
+
+on:
+  push:
+    branches: [main, castro-x-md-foundation]
+    paths:
+      - "apps/runtime/**"
+      - ".github/workflows/runtime-ci.yml"
+  pull_request:
+    paths:
+      - "apps/runtime/**"
+      - ".github/workflows/runtime-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  runtime:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/runtime
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/runtime/package.json
+      - name: Install pinned dependencies
+        run: npm install --ignore-scripts
+      - name: Check JavaScript syntax
+        run: npm run check
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
