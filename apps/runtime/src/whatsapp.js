@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
 import makeWASocket, { fetchLatestBaileysVersion, DisconnectReason, makeCacheableSignalKeyStore } from "@whiskeysockets/baileys";
+import { attachCommandHandlers } from "./commands.js";
 import pino from "pino";
 import { EncryptedAuthStore } from "./encrypted-auth-store.js";
 
@@ -40,6 +41,7 @@ export class WhatsAppSessionManager {
     });
     const record = { socket, connected: false, pairingCode: null, intentionalClose: false };
     this.sockets.set(bot.id, record);
+    attachCommandHandlers({ socket, bot });
     socket.ev.on("creds.update", saveCreds);
     socket.ev.on("connection.update", async update => {
       if (update.connection === "open") {
