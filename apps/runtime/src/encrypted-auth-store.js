@@ -72,10 +72,15 @@ export class EncryptedAuthStore {
   }
 
   persist() {
-    this.writeChain = this.writeChain.then(async () => {
+    // A failed write must not permanently poison the queue for future credential updates.
+    this.writeChain = this.writeChain.catch(() => {}).then(async () => {
       const temp = this.file + "." + crypto.randomUUID() + ".tmp";
-      await fs.writeFile(temp, this.encrypt(this.data), { mode: 0o600 });
-      await fs.rename(temp, this.file);
+      try {
+        await fs.writeFile(temp, this.encrypt(this.data), { mode: 0o600, flag: "wx" });
+        await fs.rename(temp, this.file);
+      } finally {
+        await fs.rm(temp, { force: true }).catch(() => {});
+      }
     });
     return this.writeChain;
   }
