@@ -63,11 +63,6 @@ async function ownedBot(req, res, next) {
 
 const pairLimiter = rateLimit({ windowMs: 60_000, limit: 5, standardHeaders: "draft-8", legacyHeaders: false });
 app.get("/health", (_req, res) => res.json({ ok: true, service: "castro-x-md-runtime", whatsapp: "integrated" }));
-app.get("/ready", async (_req, res) => {
-  const { error } = await supabase.from("bot_instances").select("id").limit(1);
-  if (error) return res.status(503).json({ ok: false, database: "unavailable" });
-  res.json({ ok: true, database: "available" });
-});
 app.get("/api/bots/:botId/status", authenticate, ownedBot, async (req, res) => {
   res.json(await sessions.status(req.bot.id));
 });
@@ -85,8 +80,26 @@ app.post("/api/bots/:botId/disconnect", authenticate, ownedBot, async (req, res)
   res.json(result);
 });
 
+let runtimeReady = false;
+app.get("/ready", async (_req, res) => {
+  if (!runtimeReady) return res.status(503).json({ ok: false, runtime: "starting" });
+  const { error } = await supabase.from("bot_instances").select("id").limit(1);
+  if (error) return res.status(503).json({ ok: false, database: "unavailable" });
+  res.json({ ok: true, database: "available", sessions: "restoration_started" });
+});
+
 const port = Number(process.env.PORT || 8080);
-const server = app.listen(port, () => console.log(`CASTRO X MD runtime listening on ${port}`));
+const server = app.listen(port, async () => {
+  try {
+    const result = await sessions.start();
+    runtimeReady = true;
+    console.log(`CASTRO X MD runtime listening on ${port}; restored ${result.restored} session(s)`);
+  } catch (error) {
+    console.error("Runtime session restoration failed:", error);
+    process.exitCode = 1;
+    server.close(() => process.exit(1));
+  }
+});
 let stopping = false;
 async function shutdown() {
   if (stopping) return;
