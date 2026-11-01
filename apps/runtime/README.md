@@ -15,9 +15,10 @@ This is the persistent Node.js service for WhatsApp Web sessions. The dashboard 
 - `GET /ready` database readiness.
 - `GET /api/bots/:botId/status` authenticated owner status.
 - `POST /api/bots/:botId/pair` authenticated pairing-code request; JSON body: `{"phone":"+2547XXXXXXXX"}`.
-- `POST /api/bots/:botId/disconnect` authenticated disconnect.
+- `POST /api/bots/:botId/reconnect` authenticated reconnect for an already paired bot.
+- `POST /api/bots/:botId/disconnect` authenticated disconnect (disables automatic reconnect).
 
-All API routes except health/readiness require a valid Supabase access token. Bot ownership is checked against `bot_instances.owner_id`. Pairing codes are never exposed through public status routes.
+All API routes except health/readiness require a valid Supabase access token. Bot ownership is checked against `bot_instances.owner_id`. Pairing codes are never exposed through public status routes. The `bot_sessions.reconnect_enabled` column records whether a user has opted into automatic reconnection; apply the `add_session_reconnect_control` database migration before deploying this revision.
 
 ## Security and operating limits
 Per-bot auth state is encrypted with AES-256-GCM. Mount a persistent disk and back it up securely. Never put the service-role key or encryption key in browser variables or Git. Baileys is an unofficial WhatsApp Web integration; account restrictions are possible. Test with a disposable number first. No spam, privacy bypass, view-once circumvention, or unsolicited bulk messaging.
