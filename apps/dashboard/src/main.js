@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { getBotRuntimeStatus, requestBotPairingCode, reconnectBot, disconnectBot } from "./runtime-client.js";
+import { getBotRuntimeStatus, requestBotPairingCode, reconnectBot, disconnectBot, isRuntimeConfigured } from "./runtime-client.js";
 import "./style.css";
 
 const config = window.CASTRO_X_MD_CONFIG || {};
@@ -131,13 +131,30 @@ async function boot() {
   session = data.session;
   if (session) {
     showDashboard();
-    try { await loadBots(); } catch (error) { message("global-message", error.message); }
+    try {
+      await loadBots();
+      if (!isRuntimeConfigured()) message("global-message", "WhatsApp controls are ready in the dashboard, but the persistent runtime has not been deployed or configured yet.");
+      else await refreshAllStatuses();
+    } catch (error) { message("global-message", error.message); }
   }
   supabase.auth.onAuthStateChange(async (_event, newSession) => {
     session = newSession;
     if (!session) { showAuth(); return; }
     showDashboard();
-    try { await ensureProfile(); await loadBots(); } catch (error) { message("global-message", error.message); }
+    try {
+      await ensureProfile();
+      await loadBots();
+      if (!isRuntimeConfigured()) message("global-message", "WhatsApp controls are ready in the dashboard, but the persistent runtime has not been deployed or configured yet.");
+      else await refreshAllStatuses();
+    } catch (error) { message("global-message", error.message); }
   });
 }
+
+async function refreshAllStatuses() {
+  if (!session || !isRuntimeConfigured()) return;
+  const cards = [...document.querySelectorAll("[data-bot]")];
+  await Promise.allSettled(cards.map(card => refreshOne(card)));
+}
+
+setInterval(() => { refreshAllStatuses().catch(error => console.warn("Background status refresh failed:", error)); }, 15000);
 boot();
