@@ -76,10 +76,10 @@ export class WhatsAppSessionManager {
       generateHighQualityLinkPreview: false,
       markOnlineOnConnect: false
     });
-    const record = { socket, connected: false, pairingCode: null, intentionalClose: false, bot };
+    const record = { socket, connected: false, pairingCode: null, intentionalClose: false, bot, creds: state.creds };
     this.sockets.set(bot.id, record);
     attachCommandHandlers({ socket, bot });
-    socket.ev.on("creds.update", saveCreds);
+    socket.ev.on("creds.update", async () => { await saveCreds(); });
     socket.ev.on("connection.update", async update => {
       try {
         if (this.sockets.get(bot.id) !== record) return;
@@ -104,7 +104,7 @@ export class WhatsAppSessionManager {
             this.logger.warn({ botId: bot.id }, "WhatsApp session logged out; credentials cleared");
           } else {
             await this.persistStatus(bot, "disconnected");
-            this.scheduleReconnect(bot);
+            if (record.creds.registered) this.scheduleReconnect(bot);
           }
         }
       } catch (error) {
@@ -134,18 +134,17 @@ export class WhatsAppSessionManager {
       this.reconnectTimers.delete(bot.id);
       if (this.stopping || this.sockets.has(bot.id) || this.pending.has(bot.id)) return;
       this.pending.add(bot.id);
+      let failed = false;
       try {
         const record = await this.createSocket(bot);
-        if (!record) {
-          this.retryCounts.delete(bot.id);
-          return;
-        }
+        if (!record) this.retryCounts.delete(bot.id);
       } catch (error) {
+        failed = true;
         this.logger.warn({ err: error, botId: bot.id, attempt }, "WhatsApp reconnect attempt failed");
-        this.scheduleReconnect(bot);
       } finally {
         this.pending.delete(bot.id);
       }
+      if (failed) this.scheduleReconnect(bot);
     }, delay);
     timer.unref?.();
     this.reconnectTimers.set(bot.id, timer);
