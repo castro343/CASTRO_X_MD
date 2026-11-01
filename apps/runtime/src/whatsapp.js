@@ -186,6 +186,7 @@ export class WhatsAppSessionManager {
   }
 
   async requestPairingCode(bot, phone) {
+    if (this.stopping) throw new Error("Runtime is shutting down");
     if (this.sockets.has(bot.id) || this.pending.has(bot.id)) {
       throw new Error("A WhatsApp session is already starting or running for this bot");
     }
@@ -257,7 +258,18 @@ export class WhatsAppSessionManager {
 
   async shutdown() {
     this.stopping = true;
-    for (const botId of this.reconnectTimers.keys()) this.clearReconnect(botId);
+    for (const botId of [...this.reconnectTimers.keys()]) this.clearReconnect(botId);
+
+    // Give in-flight pairing/reconnect operations a short window to finish before
+    // sockets are closed. New operations are rejected once stopping is set.
+    const drainDeadline = Date.now() + 10_000;
+    while (this.pending.size > 0 && Date.now() < drainDeadline) {
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    if (this.pending.size > 0) {
+      this.logger.warn({ pendingBotIds: [...this.pending] }, "Shutdown continuing with operations still pending");
+    }
+
     const closing = [];
     for (const [botId, record] of this.sockets) {
       record.intentionalClose = true;
