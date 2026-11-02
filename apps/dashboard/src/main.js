@@ -125,7 +125,41 @@ $("create-form").addEventListener("submit", async event => {
   }
 });
 
+$("bot-list").addEventListener("submit", async event => {
+  const form = event.target.closest("form[data-pair-form]");
+  if (!form) return;
+  event.preventDefault();
+  const card = form.closest("[data-bot]");
+  const botId = card.dataset.bot;
+  const phone = form.elements.phone.value.trim();
+  const submit = form.querySelector('button[type="submit"]');
+  const status = form.querySelector("[data-pair-message]");
+  submit.disabled = true;
+  status.textContent = "Requesting a secure pairing code…";
+  try {
+    const result = await requestBotPairingCode(botId, phone, token());
+    form.innerHTML = `
+      <div class="eyebrow">PAIRING CODE</div>
+      <div class="pair-code">${escapeHtml(result.code || "Code unavailable")}</div>
+      <p class="muted">On your phone, open WhatsApp → Linked devices → Link a device → Link with phone number. Enter this code there. Do not share it with anyone.</p>
+      <p class="notice" data-pair-message>Waiting for WhatsApp to finish linking…</p>
+    `;
+    await refreshOne(card);
+    message("global-message", "Pairing code generated. Finish linking inside WhatsApp on your phone.");
+  } catch (error) {
+    status.textContent = error.message || "Could not request a pairing code.";
+    submit.disabled = false;
+  }
+});
+
 $("bot-list").addEventListener("click", async event => {
+  const cancelPair = event.target.closest("[data-pair-cancel]");
+  if (cancelPair) {
+    const box = cancelPair.closest("[data-pair-box]");
+    box.hidden = true;
+    box.innerHTML = "";
+    return;
+  }
   const button = event.target.closest("button[data-action]");
   if (!button) return;
   const card = button.closest("[data-bot]"), botId = card.dataset.bot, action = button.dataset.action;
@@ -136,12 +170,18 @@ $("bot-list").addEventListener("click", async event => {
       const result = await refreshOne(card);
       message("global-message", `Current status: ${result.status}`);
     } else if (action === "pair") {
-      const phone = window.prompt("Enter the WhatsApp number in international format, e.g. +2547XXXXXXXX:");
-      if (!phone) return;
-      const result = await requestBotPairingCode(botId, phone.trim(), token());
-      box.hidden = false; box.innerHTML = `<div class="eyebrow">LINK DEVICE</div><div class="pair-code">${escapeHtml(result.code || "Code unavailable")}</div><p class="muted">On WhatsApp, open Linked devices → Link a device → Link with phone number, then enter this code. Keep this code private.</p>`;
-      await refreshOne(card);
-      message("global-message", "Pairing code generated. Complete linking on your WhatsApp phone.");
+      box.hidden = false;
+      box.innerHTML = `
+        <div class="eyebrow">CONNECT YOUR WHATSAPP</div>
+        <p class="muted">Enter the WhatsApp number for this bot. Use international format, including the country code.</p>
+        <form data-pair-form class="pair-form">
+          <label>WhatsApp phone number
+            <input name="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="+2547XXXXXXXX" pattern="\\+[1-9][0-9]{7,14}" required>
+          </label>
+          <div class="actions"><button class="primary" type="submit">Get pairing code</button><button class="outline" type="button" data-pair-cancel>Cancel</button></div>
+          <p class="notice" data-pair-message role="status"></p>
+        </form>`;
+      message("global-message", "Enter the WhatsApp number in the form inside your bot card.");
     } else if (action === "reconnect") {
       const result = await reconnectBot(botId, token()); message("global-message", `Reconnect request: ${result.status || "accepted"}`);
       await refreshOne(card);
