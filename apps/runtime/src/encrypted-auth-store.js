@@ -40,14 +40,23 @@ export class EncryptedAuthStore {
     try {
       let payload;
       if (this.storage) {
-        const { data, error } = await this.storage.download(this.objectPath);
-        if (error) {
-          const missing = String(error.statusCode || error.status || "") === "404"
-            || /not found/i.test(error.message || "");
-          if (!missing) throw error;
-          payload = null;
-        } else {
+        // Check the private bucket listing first. Supabase Storage can return a
+        // non-404 error for a missing object, so don't treat every download error
+        // as evidence of a damaged session.
+        const folder = path.posix.dirname(this.objectPath);
+        const filename = path.posix.basename(this.objectPath);
+        const { data: objects, error: listError } = await this.storage.list(folder, {
+          limit: 100,
+          search: filename
+        });
+        if (listError) throw listError;
+        const exists = (objects || []).some(item => item.name === filename);
+        if (exists) {
+          const { data, error } = await this.storage.download(this.objectPath);
+          if (error || !data) throw error || new Error("Stored session object could not be downloaded");
           payload = Buffer.from(await data.arrayBuffer());
+        } else {
+          payload = null;
         }
       } else {
         await fs.mkdir(this.directory, { recursive: true, mode: 0o700 });
