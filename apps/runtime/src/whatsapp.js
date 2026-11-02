@@ -222,7 +222,6 @@ export class WhatsAppSessionManager {
     const cooldownSeconds = Number.isFinite(configuredCooldown)
       ? Math.min(3600, Math.max(30, Math.floor(configuredCooldown)))
       : 60;
-    this.cooldowns.set(bot.id, now + cooldownSeconds * 1000);
     try {
       if (!this.sessionBucket) await fs.mkdir(this.sessionDir, { recursive: true, mode: 0o700 });
       const store = this.authStore(bot.id);
@@ -232,9 +231,11 @@ export class WhatsAppSessionManager {
       if (!record) throw new Error("Could not initialize WhatsApp pairing");
       const code = await record.socket.requestPairingCode(phone.replace(/\D/g, ""));
       record.pairingCode = code;
+      this.cooldowns.set(bot.id, Date.now() + cooldownSeconds * 1000);
       await this.persistStatus(bot, "pairing", false, "pairing", true);
       return { status: "pairing", code };
     } catch (error) {
+      this.cooldowns.delete(bot.id);
       const record = this.sockets.get(bot.id);
       if (record) {
         record.intentionalClose = true;
