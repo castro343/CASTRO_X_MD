@@ -43,6 +43,8 @@ const sessions = new WhatsAppSessionManager({
   sessionBucket
 });
 app.disable("x-powered-by");
+// Render sits behind a trusted reverse proxy; needed for correct client IP rate limiting.
+app.set("trust proxy", 1);
 app.use(helmet());
 app.use(express.json({ limit: "32kb" }));
 app.use(rateLimit({ windowMs: 60_000, limit: 120, standardHeaders: "draft-8", legacyHeaders: false }));
