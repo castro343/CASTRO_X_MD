@@ -36,10 +36,10 @@ export function attachCommandHandlers({ socket, bot, getUptime = () => process.u
           "╭─〔 *CASTRO X MD* 〕",
           "│",
           `│ Prefix: ${prefix}`,
-          "│ .alive — Check bot status",
-          "│ .ping — Check response",
-          "│ .runtime — View runtime uptime",
-          "│ .menu — Show commands",
+          `│ ${prefix}alive — Check bot status`,
+          `│ ${prefix}ping — Check response`,
+          `│ ${prefix}runtime — View runtime uptime`,
+          `│ ${prefix}menu — Show commands`,
           "│",
           "╰─ Secure multi-user WhatsApp platform"
         ].join("\\n");
