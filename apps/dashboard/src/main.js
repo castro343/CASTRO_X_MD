@@ -14,7 +14,6 @@ let signupMode = false;
 function message(id, text = "") { $(id).textContent = text; }
 function escapeHtml(value = "") { return String(value).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 function token() { return session?.access_token; }
-
 function showAuth() { $("auth-view").hidden = false; $("dashboard-view").hidden = true; }
 function showDashboard() { $("auth-view").hidden = true; $("dashboard-view").hidden = false; $("user-email").textContent = session?.user?.email || ""; }
 
@@ -73,7 +72,8 @@ $("auth-form").addEventListener("submit", async event => {
 
 async function ensureProfile() {
   if (!session?.user) return;
-  const { error } = await supabase.from("profiles").upsert({ id:session.user.id, email:session.user.email }, { onConflict:"id" });
+  // profiles has id/display_name columns; email belongs to auth.users, not profiles.
+  const { error } = await supabase.from("profiles").upsert({ id:session.user.id }, { onConflict:"id" });
   if (error) console.warn("Profile sync skipped:", error.message);
 }
 
@@ -92,12 +92,37 @@ $("show-create").addEventListener("click", () => { $("create-form").hidden = fal
 $("cancel-create").addEventListener("click", () => { $("create-form").hidden = true; message("create-message"); });
 
 $("create-form").addEventListener("submit", async event => {
-  event.preventDefault(); message("create-message", "Creating bot…");
-  const { data, error } = await supabase.from("bot_instances").insert({ owner_id:session.user.id, bot_name:$("bot-name").value.trim(), prefix:$("bot-prefix").value, mode:$("bot-mode").value, status:"not_connected" }).select().single();
-  if (error) return message("create-message", error.message);
-  $("create-form").reset(); $("bot-prefix").value = "."; $("create-form").hidden = true;
-  message("global-message", "Bot instance created successfully.");
-  await loadBots();
+  event.preventDefault();
+  const submit = $("create-form").querySelector('button[type="submit"]');
+  if (!session?.user) { message("create-message", "Your session has expired. Sign out and sign in again."); return; }
+  submit.disabled = true;
+  submit.textContent = "Creating…";
+  message("create-message", "Saving your bot instance…");
+  message("global-message");
+  try {
+    const payload = {
+      owner_id: session.user.id,
+      bot_name: $("bot-name").value.trim(),
+      prefix: $("bot-prefix").value.trim() || ".",
+      mode: $("bot-mode").value,
+      status: "not_connected"
+    };
+    const { data, error } = await supabase.from("bot_instances").insert(payload).select("id,bot_name,prefix,mode,status,created_at").single();
+    if (error) throw error;
+    bots.unshift(data);
+    $("create-form").reset();
+    $("bot-prefix").value = ".";
+    $("create-form").hidden = true;
+    await loadBots();
+    message("global-message", "Bot instance created successfully. It is not connected to WhatsApp yet.");
+  } catch (error) {
+    console.error("Bot creation failed:", error);
+    const detail = error?.message || error?.details || error?.hint || "Unknown database or network error.";
+    message("create-message", `Could not create bot: ${detail}`);
+  } finally {
+    submit.disabled = false;
+    submit.textContent = "Create instance";
+  }
 });
 
 $("bot-list").addEventListener("click", async event => {
