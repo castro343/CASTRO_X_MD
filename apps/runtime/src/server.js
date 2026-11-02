@@ -92,13 +92,26 @@ app.get("/api/bots/:botId/status", authenticate, ownedBot, async (req, res) => {
   res.json(await sessions.status(req.bot.id));
 });
 app.post("/api/bots/:botId/pair", authenticate, pairLimiter, ownedBot, async (req, res) => {
-  const parsed = z.object({ phone: z.string().regex(/^\+[1-9]\d{7,14}$/) }).safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: "Phone must be in international format, e.g. +2547XXXXXXXX" });
+  const parsed = z.object({ phone: z.string().min(8).max(24) }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Enter a valid WhatsApp phone number." });
+  let digits = parsed.data.phone.replace(/\D/g, "");
+  if (digits.startsWith("00")) digits = digits.slice(2);
+  if (/^0[17]\d{8}$/.test(digits)) digits = "254" + digits.slice(1);
+  else if (/^[17]\d{8}$/.test(digits)) digits = "254" + digits;
+  if (!/^[1-9]\d{7,14}$/.test(digits)) {
+    return res.status(400).json({ error: "Enter a valid number with country code, e.g. +2547XXXXXXXX, 2547XXXXXXXX or 07XXXXXXXX." });
+  }
   try {
-    res.json(await sessions.requestPairingCode(req.bot, parsed.data.phone));
+    res.json(await sessions.requestPairingCode(req.bot, digits));
   } catch (error) {
-    console.warn("WhatsApp pairing request failed:", error);
-    res.status(400).json({ error: "Pairing request failed. Check the phone number and session state, then try again." });
+    const detail = String(error?.message || "");
+    console.warn("WhatsApp pairing request failed:", detail || "Unknown error");
+    const userMessage = /already.*paired|already.*running|wait \d+ seconds/i.test(detail)
+      ? detail
+      : /connection closed/i.test(detail)
+        ? "WhatsApp closed the connection before the pairing code was ready. Wait a moment and try again."
+        : "Pairing could not start. Check the bot session and try again.";
+    res.status(400).json({ error: userMessage });
   }
 });
 app.post("/api/bots/:botId/reconnect", authenticate, ownedBot, async (req, res) => {
