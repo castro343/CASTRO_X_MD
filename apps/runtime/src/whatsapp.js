@@ -17,6 +17,7 @@ export class WhatsAppSessionManager {
     this.reconnectTimers = new Map();
     this.retryCounts = new Map();
     this.stopping = false;
+    this.lifecycleGeneration = 0;
     this.logger = pino({ level: process.env.LOG_LEVEL || "info" });
     const configuredAttempts = Number(process.env.MAX_RECONNECT_ATTEMPTS || 8);
     this.maxReconnectAttempts = Number.isInteger(configuredAttempts)
@@ -63,14 +64,17 @@ export class WhatsAppSessionManager {
 
   async createSocket(bot, { pairing = false } = {}) {
     if (this.stopping) throw new Error("Runtime is shutting down");
+    const generation = this.lifecycleGeneration;
     if (this.sockets.has(bot.id)) throw new Error("A WhatsApp session is already running for this bot");
     const store = new EncryptedAuthStore({ directory: this.directory(bot.id), encryptionKey: this.encryptionKey });
     const { state, saveCreds } = await store.load();
+    if (this.stopping || generation !== this.lifecycleGeneration) throw new Error("Runtime is shutting down");
     if (!pairing && !state.creds.registered) {
       this.logger.warn({ botId: bot.id }, "Skipping session without registered WhatsApp credentials");
       return null;
     }
     const { version } = await fetchLatestBaileysVersion();
+    if (this.stopping || generation !== this.lifecycleGeneration) throw new Error("Runtime is shutting down");
     const socket = makeWASocket({
       version,
       auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, this.logger) },
@@ -265,6 +269,7 @@ export class WhatsAppSessionManager {
 
   async shutdown() {
     this.stopping = true;
+    this.lifecycleGeneration++;
     for (const botId of [...this.reconnectTimers.keys()]) this.clearReconnect(botId);
 
     // Give in-flight pairing/reconnect operations a short window to finish before
