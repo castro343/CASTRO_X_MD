@@ -7,10 +7,11 @@ import pino from "pino";
 import { EncryptedAuthStore } from "./encrypted-auth-store.js";
 
 export class WhatsAppSessionManager {
-  constructor({ supabase, encryptionKey, sessionDir, authStoreFactory = options => new EncryptedAuthStore(options), versionFetcher = fetchLatestBaileysVersion, socketFactory = makeWASocket, signalKeyStoreFactory = makeCacheableSignalKeyStore }) {
+  constructor({ supabase, encryptionKey, sessionDir, sessionBucket = null, authStoreFactory = options => new EncryptedAuthStore(options), versionFetcher = fetchLatestBaileysVersion, socketFactory = makeWASocket, signalKeyStoreFactory = makeCacheableSignalKeyStore }) {
     this.supabase = supabase;
     this.encryptionKey = encryptionKey;
     this.sessionDir = sessionDir;
+    this.sessionBucket = sessionBucket;
     this.authStoreFactory = authStoreFactory;
     this.versionFetcher = versionFetcher;
     this.socketFactory = socketFactory;
@@ -31,6 +32,18 @@ export class WhatsAppSessionManager {
 
   directory(botId) {
     return path.join(this.sessionDir, crypto.createHash("sha256").update(String(botId)).digest("hex"));
+  }
+
+  authStore(botId) {
+    const directory = this.directory(botId);
+    if (this.sessionBucket) {
+      const objectPath = `sessions/${crypto.createHash("sha256").update(String(botId)).digest("hex")}/auth.enc`;
+      return this.authStoreFactory({
+        directory, encryptionKey: this.encryptionKey,
+        storage: this.supabase.storage.from(this.sessionBucket), objectPath
+      });
+    }
+    return this.authStoreFactory({ directory, encryptionKey: this.encryptionKey });
   }
 
   runtimeRef(botId) {
@@ -70,7 +83,7 @@ export class WhatsAppSessionManager {
     if (this.stopping) throw new Error("Runtime is shutting down");
     const generation = this.lifecycleGeneration;
     if (this.sockets.has(bot.id)) throw new Error("A WhatsApp session is already running for this bot");
-    const store = this.authStoreFactory({ directory: this.directory(bot.id), encryptionKey: this.encryptionKey });
+    const store = this.authStore(bot.id);
     const { state, saveCreds } = await store.load();
     if (this.stopping || generation !== this.lifecycleGeneration) throw new Error("Runtime is shutting down");
     if (!pairing && !state.creds.registered) {
@@ -115,7 +128,7 @@ export class WhatsAppSessionManager {
           if (code === DisconnectReason.loggedOut) {
             this.clearReconnect(bot.id);
             this.retryCounts.delete(bot.id);
-            await fs.rm(this.directory(bot.id), { recursive: true, force: true });
+            await this.authStore(bot.id).remove();
             await this.persistStatus(bot, "revoked", false, "disconnected");
             this.logger.warn({ botId: bot.id }, "WhatsApp session logged out; credentials cleared");
           } else {
@@ -171,7 +184,7 @@ export class WhatsAppSessionManager {
   }
 
   async start() {
-    await fs.mkdir(this.sessionDir, { recursive: true, mode: 0o700 });
+    if (!this.sessionBucket) await fs.mkdir(this.sessionDir, { recursive: true, mode: 0o700 });
     const { data: sessions, error: sessionError } = await this.supabase.from("bot_sessions")
       .select("bot_instance_id,owner_id,status,reconnect_enabled")
       .in("status", ["connected", "disconnected"]).eq("reconnect_enabled", true);
@@ -211,8 +224,8 @@ export class WhatsAppSessionManager {
       : 60;
     this.cooldowns.set(bot.id, now + cooldownSeconds * 1000);
     try {
-      await fs.mkdir(this.sessionDir, { recursive: true, mode: 0o700 });
-      const store = new EncryptedAuthStore({ directory: this.directory(bot.id), encryptionKey: this.encryptionKey });
+      if (!this.sessionBucket) await fs.mkdir(this.sessionDir, { recursive: true, mode: 0o700 });
+      const store = this.authStore(bot.id);
       const { state } = await store.load();
       if (state.creds.registered) throw new Error("This bot already has a paired WhatsApp session. Use reconnect or disconnect instead of requesting another code.");
       const record = await this.createSocket(bot, { pairing: true });
