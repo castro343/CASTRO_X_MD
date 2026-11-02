@@ -69,3 +69,45 @@ test("shutdown closes active sockets and clears reconnect timers", async () => {
   assert.equal(manager.reconnectTimers.size, 0);
   assert.equal(manager.stopping, true);
 });
+
+test("bounds reconnect attempts from environment configuration", () => {
+  const previous = process.env.MAX_RECONNECT_ATTEMPTS;
+  try {
+    process.env.MAX_RECONNECT_ATTEMPTS = "999";
+    const manager = new WhatsAppSessionManager({
+      supabase: {},
+      encryptionKey: "test-key",
+      sessionDir: "/tmp/castro-x-md-test"
+    });
+    assert.equal(manager.maxReconnectAttempts, 20);
+  } finally {
+    if (previous === undefined) delete process.env.MAX_RECONNECT_ATTEMPTS;
+    else process.env.MAX_RECONNECT_ATTEMPTS = previous;
+  }
+});
+
+test("does not schedule reconnect after shutdown starts", () => {
+  const manager = new WhatsAppSessionManager({
+    supabase: {},
+    encryptionKey: "test-key",
+    sessionDir: "/tmp/castro-x-md-test"
+  });
+  manager.stopping = true;
+  manager.scheduleReconnect({ id: "bot-1" });
+  assert.equal(manager.reconnectTimers.size, 0);
+  assert.equal(manager.retryCounts.size, 0);
+});
+
+test("does not schedule duplicate reconnect timers for one bot", () => {
+  const manager = new WhatsAppSessionManager({
+    supabase: {},
+    encryptionKey: "test-key",
+    sessionDir: "/tmp/castro-x-md-test"
+  });
+  manager.scheduleReconnect({ id: "bot-1" });
+  const timer = manager.reconnectTimers.get("bot-1");
+  manager.scheduleReconnect({ id: "bot-1" });
+  assert.equal(manager.reconnectTimers.size, 1);
+  assert.equal(manager.reconnectTimers.get("bot-1"), timer);
+  manager.clearReconnect("bot-1");
+});
