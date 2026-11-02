@@ -111,3 +111,38 @@ test("does not schedule duplicate reconnect timers for one bot", () => {
   assert.equal(manager.reconnectTimers.get("bot-1"), timer);
   manager.clearReconnect("bot-1");
 });
+
+test("does not create a socket when shutdown invalidates an in-flight startup", async () => {
+  let releaseLoad;
+  let loadStarted;
+  const started = new Promise(resolve => { loadStarted = resolve; });
+  const loadGate = new Promise(resolve => { releaseLoad = resolve; });
+  let socketCreations = 0;
+  const manager = new WhatsAppSessionManager({
+    supabase: {},
+    encryptionKey: "test-key",
+    sessionDir: "/tmp/castro-x-md-test",
+    authStoreFactory: () => ({
+      load: async () => {
+        loadStarted();
+        await loadGate;
+        return { state: { creds: { registered: true }, keys: {} }, saveCreds: async () => {} };
+      }
+    }),
+    versionFetcher: async () => ({ version: [2, 3000, 0] }),
+    socketFactory: () => {
+      socketCreations++;
+      return { ev: { on: () => {} } };
+    },
+    signalKeyStoreFactory: keys => keys
+  });
+
+  const startup = manager.createSocket({ id: "bot-1", owner_id: "user-1" });
+  await started;
+  await manager.shutdown();
+  releaseLoad();
+
+  await assert.rejects(startup, /Runtime is shutting down/);
+  assert.equal(socketCreations, 0);
+  assert.equal(manager.sockets.size, 0);
+});
