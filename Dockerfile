@@ -1,15 +1,12 @@
-FROM node:lts-buster
-
-RUN git clone https://github.com/Adeel-Xtech/ADEEL-MD.git /root/adeel-bot
-
-WORKDIR /root/adeel-bot
-
-RUN apt-get update && \
-    apt-get install -y ffmpeg imagemagick webp && \
-    rm -rf /var/lib/apt/lists/*
-
-RUN npm install && npm install -g pm2
-
-EXPOSE 9090
-
+FROM node:22-bookworm-slim
+ENV NODE_ENV=production
+WORKDIR /app
+COPY apps/runtime/package*.json ./
+RUN npm install --omit=dev && npm cache clean --force
+COPY apps/runtime/src ./src
+RUN mkdir -p /var/lib/castro-x-md/sessions && chown -R node:node /var/lib/castro-x-md
+USER node
+EXPOSE 10000
+ENV PORT=10000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 CMD node -e "fetch('http://127.0.0.1:10000/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 CMD ["npm", "start"]
