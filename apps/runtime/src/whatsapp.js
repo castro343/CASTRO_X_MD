@@ -229,6 +229,10 @@ export class WhatsAppSessionManager {
       if (state.creds.registered) throw new Error("This bot already has a paired WhatsApp session. Use reconnect or disconnect instead of requesting another code.");
       const record = await this.createSocket(bot, { pairing: true });
       if (!record) throw new Error("Could not initialize WhatsApp pairing");
+      const configuredDelay = Number(process.env.PAIRING_START_DELAY_MS || 5000);
+      const delayMs = Number.isFinite(configuredDelay) ? Math.min(15000, Math.max(2000, configuredDelay)) : 5000;
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+      if (this.sockets.get(bot.id) !== record) throw new Error("WhatsApp connection closed during startup");
       const code = await record.socket.requestPairingCode(phone.replace(/\D/g, ""));
       record.pairingCode = code;
       this.cooldowns.set(bot.id, Date.now() + cooldownSeconds * 1000);
