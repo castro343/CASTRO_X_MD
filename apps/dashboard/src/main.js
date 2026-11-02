@@ -11,6 +11,14 @@ let session = null;
 let bots = [];
 let signupMode = false;
 
+function normalizeWhatsAppPhone(value) {
+  let digits = String(value || "").replace(/\\D/g, "");
+  if (digits.startsWith("00")) digits = digits.slice(2);
+  if (/^0[17]\\d{8}$/.test(digits)) digits = "254" + digits.slice(1);
+  else if (/^[17]\\d{8}$/.test(digits)) digits = "254" + digits;
+  if (!/^[1-9]\\d{7,14}$/.test(digits)) throw new Error("Enter a valid number, e.g. +2547XXXXXXXX or 07XXXXXXXX.");
+  return "+" + digits;
+}
 function message(id, text = "") { $(id).textContent = text; }
 function escapeHtml(value = "") { return String(value).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 function token() { return session?.access_token; }
@@ -131,13 +139,13 @@ $("bot-list").addEventListener("submit", async event => {
   event.preventDefault();
   const card = form.closest("[data-bot]");
   const botId = card.dataset.bot;
-  const phone = form.elements.phone.value.trim();
+  const rawPhone = form.elements.phone.value.trim();
   const submit = form.querySelector('button[type="submit"]');
   const status = form.querySelector("[data-pair-message]");
   submit.disabled = true;
   status.textContent = "Requesting a secure pairing code…";
   try {
-    const result = await requestBotPairingCode(botId, phone, token());
+    const result = await requestBotPairingCode(botId, normalizeWhatsAppPhone(rawPhone), token());
     form.innerHTML = `
       <div class="eyebrow">PAIRING CODE</div>
       <div class="pair-code">${escapeHtml(result.code || "Code unavailable")}</div>
