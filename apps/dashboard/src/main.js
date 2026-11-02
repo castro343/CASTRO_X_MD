@@ -56,10 +56,12 @@ $("auth-form").addEventListener("submit", async event => {
   const button = $("auth-submit"); button.disabled = true; message("auth-message", "Please wait…");
   try {
     const email = $("email").value.trim(), password = $("password").value;
-    const result = signupMode ? await supabase.auth.signUp({ email, password }) : await supabase.auth.signInWithPassword({ email, password });
+    const result = signupMode
+      ? await supabase.auth.signUp({ email, password, options: { emailRedirectTo: window.location.origin } })
+      : await supabase.auth.signInWithPassword({ email, password });
     if (result.error) throw result.error;
     if (signupMode && !result.data.session) {
-      message("auth-message", "Account created. Check your email to confirm, then sign in.");
+      message("auth-message", "Account created. Check your email to confirm, then return here and sign in.");
       return;
     }
     session = result.data.session;
