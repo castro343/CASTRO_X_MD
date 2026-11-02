@@ -12,11 +12,11 @@ let bots = [];
 let signupMode = false;
 
 function normalizeWhatsAppPhone(value) {
-  let digits = String(value || "").replace(/\\D/g, "");
+  let digits = String(value || "").split("").filter(ch => ch >= "0" && ch <= "9").join("");
   if (digits.startsWith("00")) digits = digits.slice(2);
-  if (/^0[17]\\d{8}$/.test(digits)) digits = "254" + digits.slice(1);
-  else if (/^[17]\\d{8}$/.test(digits)) digits = "254" + digits;
-  if (!/^[1-9]\\d{7,14}$/.test(digits)) throw new Error("Enter a valid number, e.g. +2547XXXXXXXX or 07XXXXXXXX.");
+  if (digits.length === 10 && (digits.startsWith("07") || digits.startsWith("01"))) digits = "254" + digits.slice(1);
+  else if (digits.length === 9 && (digits.startsWith("7") || digits.startsWith("1"))) digits = "254" + digits;
+  if (digits.length < 8 || digits.length > 15 || digits.startsWith("0")) throw new Error("Enter a valid number, e.g. +2547XXXXXXXX, 2547XXXXXXXX or 07XXXXXXXX.");
   return "+" + digits;
 }
 function message(id, text = "") { $(id).textContent = text; }
