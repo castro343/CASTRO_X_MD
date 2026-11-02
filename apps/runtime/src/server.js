@@ -13,11 +13,34 @@ if (Buffer.byteLength(process.env.SESSION_ENCRYPTION_KEY, "utf8") < 32) throw ne
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false }
 });
+const sessionBucket = process.env.SUPABASE_SESSION_BUCKET || "castro-x-md-sessions";
+
+async function ensurePrivateSessionBucket() {
+  const { data, error } = await supabase.storage.getBucket(sessionBucket);
+  if (!error && data) {
+    if (data.public) throw new Error("WhatsApp session bucket must be private");
+    return;
+  }
+  if (error && String(error.statusCode || error.status || "") !== "404"
+      && !/not found/i.test(error.message || "")) {
+    throw new Error("Could not verify private WhatsApp session bucket");
+  }
+  const { error: createError } = await supabase.storage.createBucket(sessionBucket, {
+    public: false,
+    fileSizeLimit: 10 * 1024 * 1024,
+    allowedMimeTypes: ["application/octet-stream"]
+  });
+  if (createError && !/already exists/i.test(createError.message || "")) {
+    throw new Error("Could not create private WhatsApp session bucket");
+  }
+}
+
 const app = express();
 const sessions = new WhatsAppSessionManager({
   supabase,
   encryptionKey: process.env.SESSION_ENCRYPTION_KEY,
-  sessionDir: process.env.SESSION_DIR || "/var/lib/castro-x-md/sessions"
+  sessionDir: process.env.SESSION_DIR || "/var/lib/castro-x-md/sessions",
+  sessionBucket
 });
 app.disable("x-powered-by");
 app.use(helmet());
@@ -105,6 +128,7 @@ app.get("/ready", async (_req, res) => {
 const port = Number(process.env.PORT || 8080);
 const server = app.listen(port, async () => {
   try {
+    await ensurePrivateSessionBucket();
     const result = await sessions.start();
     runtimeReady = true;
     console.log(`CASTRO X MD runtime listening on ${port}; restored ${result.restored} session(s)`);
