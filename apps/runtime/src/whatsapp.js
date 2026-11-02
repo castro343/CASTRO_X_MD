@@ -7,10 +7,14 @@ import pino from "pino";
 import { EncryptedAuthStore } from "./encrypted-auth-store.js";
 
 export class WhatsAppSessionManager {
-  constructor({ supabase, encryptionKey, sessionDir }) {
+  constructor({ supabase, encryptionKey, sessionDir, authStoreFactory = options => new EncryptedAuthStore(options), versionFetcher = fetchLatestBaileysVersion, socketFactory = makeWASocket, signalKeyStoreFactory = makeCacheableSignalKeyStore }) {
     this.supabase = supabase;
     this.encryptionKey = encryptionKey;
     this.sessionDir = sessionDir;
+    this.authStoreFactory = authStoreFactory;
+    this.versionFetcher = versionFetcher;
+    this.socketFactory = socketFactory;
+    this.signalKeyStoreFactory = signalKeyStoreFactory;
     this.sockets = new Map();
     this.pending = new Set();
     this.cooldowns = new Map();
@@ -66,18 +70,18 @@ export class WhatsAppSessionManager {
     if (this.stopping) throw new Error("Runtime is shutting down");
     const generation = this.lifecycleGeneration;
     if (this.sockets.has(bot.id)) throw new Error("A WhatsApp session is already running for this bot");
-    const store = new EncryptedAuthStore({ directory: this.directory(bot.id), encryptionKey: this.encryptionKey });
+    const store = this.authStoreFactory({ directory: this.directory(bot.id), encryptionKey: this.encryptionKey });
     const { state, saveCreds } = await store.load();
     if (this.stopping || generation !== this.lifecycleGeneration) throw new Error("Runtime is shutting down");
     if (!pairing && !state.creds.registered) {
       this.logger.warn({ botId: bot.id }, "Skipping session without registered WhatsApp credentials");
       return null;
     }
-    const { version } = await fetchLatestBaileysVersion();
+    const { version } = await this.versionFetcher();
     if (this.stopping || generation !== this.lifecycleGeneration) throw new Error("Runtime is shutting down");
-    const socket = makeWASocket({
+    const socket = this.socketFactory({
       version,
-      auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, this.logger) },
+      auth: { creds: state.creds, keys: this.signalKeyStoreFactory(state.keys, this.logger) },
       logger: this.logger,
       printQRInTerminal: false,
       browser: ["CASTRO X MD", "Chrome", "1.0.0"],
