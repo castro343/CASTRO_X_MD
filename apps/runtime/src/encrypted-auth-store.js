@@ -6,10 +6,13 @@ import { BufferJSON, initAuthCreds, proto } from "@whiskeysockets/baileys";
 const algorithm = "aes-256-gcm";
 
 export class EncryptedAuthStore {
-  constructor({ directory, encryptionKey }) {
+  constructor({ directory, encryptionKey, storage = null, objectPath = null }) {
     this.directory = directory;
+    this.storage = storage;
+    this.objectPath = objectPath;
+    if (Boolean(storage) !== Boolean(objectPath)) throw new Error("Remote auth storage requires both storage and objectPath");
     this.key = crypto.createHash("sha256").update(encryptionKey).digest();
-    this.file = path.join(directory, "auth.enc");
+    this.file = directory ? path.join(directory, "auth.enc") : null;
     this.writeChain = Promise.resolve();
     this.data = null;
   }
@@ -34,13 +37,27 @@ export class EncryptedAuthStore {
   }
 
   async load() {
-    await fs.mkdir(this.directory, { recursive: true, mode: 0o700 });
     try {
-      this.data = this.decrypt(await fs.readFile(this.file));
+      let payload;
+      if (this.storage) {
+        const { data, error } = await this.storage.download(this.objectPath);
+        if (error) {
+          const missing = String(error.statusCode || error.status || "") === "404"
+            || /not found/i.test(error.message || "");
+          if (!missing) throw error;
+          payload = null;
+        } else {
+          payload = Buffer.from(await data.arrayBuffer());
+        }
+      } else {
+        await fs.mkdir(this.directory, { recursive: true, mode: 0o700 });
+        try { payload = await fs.readFile(this.file); }
+        catch (error) { if (error.code !== "ENOENT") throw error; payload = null; }
+      }
+      this.data = payload ? this.decrypt(payload) : { creds: initAuthCreds(), keys: {} };
+      if (!payload) await this.persist();
     } catch (error) {
-      if (error.code !== "ENOENT") throw new Error("Unable to decrypt WhatsApp session; refusing to overwrite it");
-      this.data = { creds: initAuthCreds(), keys: {} };
-      await this.persist();
+      throw new Error("Unable to load WhatsApp session safely; refusing to overwrite it");
     }
     const creds = this.data.creds;
     const keys = {
@@ -74,14 +91,31 @@ export class EncryptedAuthStore {
   persist() {
     // A failed write must not permanently poison the queue for future credential updates.
     this.writeChain = this.writeChain.catch(() => {}).then(async () => {
-      const temp = this.file + "." + crypto.randomUUID() + ".tmp";
-      try {
-        await fs.writeFile(temp, this.encrypt(this.data), { mode: 0o600, flag: "wx" });
-        await fs.rename(temp, this.file);
-      } finally {
-        await fs.rm(temp, { force: true }).catch(() => {});
+      const encrypted = this.encrypt(this.data);
+      if (this.storage) {
+        const { error } = await this.storage.upload(this.objectPath, encrypted, {
+          contentType: "application/octet-stream", cacheControl: "0", upsert: true
+        });
+        if (error) throw new Error("Could not persist encrypted WhatsApp session to remote storage");
+      } else {
+        const temp = this.file + "." + crypto.randomUUID() + ".tmp";
+        try {
+          await fs.writeFile(temp, encrypted, { mode: 0o600, flag: "wx" });
+          await fs.rename(temp, this.file);
+        } finally {
+          await fs.rm(temp, { force: true }).catch(() => {});
+        }
       }
     });
     return this.writeChain;
+  }
+
+  async remove() {
+    if (this.storage) {
+      const { error } = await this.storage.remove([this.objectPath]);
+      if (error) throw new Error("Could not remove encrypted WhatsApp session");
+      return;
+    }
+    await fs.rm(this.directory, { recursive: true, force: true });
   }
 }
