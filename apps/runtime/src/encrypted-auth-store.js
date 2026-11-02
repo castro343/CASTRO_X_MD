@@ -57,7 +57,7 @@ export class EncryptedAuthStore {
       this.data = payload ? this.decrypt(payload) : { creds: initAuthCreds(), keys: {} };
       if (!payload) await this.persist();
     } catch (error) {
-      throw new Error("Unable to load WhatsApp session safely; refusing to overwrite it");
+      throw new Error("Unable to decrypt WhatsApp session or load it safely; refusing to overwrite it");
     }
     const creds = this.data.creds;
     const keys = {
