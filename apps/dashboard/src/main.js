@@ -67,7 +67,7 @@ function clearPairingTimer(botId) {
 function renderPairingCode(card, code, expiresAt) {
   const botId = card.dataset.bot;
   const box = card.querySelector("[data-pair-box]");
-  const expiry = expiresAt ? new Date(expiresAt).getTime() : Date.now() + 25 * 60_000;
+  const expiry = expiresAt ? new Date(expiresAt).getTime() : Date.now() + 25_000;
   clearPairingTimer(botId);
   box.hidden = false;
   box.innerHTML = `
@@ -87,9 +87,8 @@ function renderPairingCode(card, code, expiresAt) {
       clearPairingTimer(botId);
       return;
     }
-    const minutes = Math.floor(remaining / 60_000);
-    const seconds = Math.floor((remaining % 60_000) / 1000);
-    countdown.textContent = `Waiting for WhatsApp to finish linking · Expires in ${String(minutes).padStart(2,"0")}:${String(seconds).padStart(2,"0")}`;
+    const seconds = Math.ceil(remaining / 1000);
+    countdown.textContent = `Enter this code in WhatsApp within ${seconds} second(s).`;
   };
   tick();
   if (expiry > Date.now()) pairingTimers.set(botId, setInterval(tick, 1000));
