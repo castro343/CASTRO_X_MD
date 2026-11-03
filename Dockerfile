@@ -1,15 +1,18 @@
-FROM node:lts-buster
+FROM node:22-bookworm-slim
 
-RUN git clone https://github.com/Adeel-Xtech/ADEEL-MD.git /root/adeel-bot
+ENV NODE_ENV=production
+WORKDIR /app
 
-WORKDIR /root/adeel-bot
+# Render's Docker build context is configured as apps/runtime.
+COPY package*.json ./
+RUN npm install --omit=dev && npm cache clean --force
 
-RUN apt-get update && \
-    apt-get install -y ffmpeg imagemagick webp && \
-    rm -rf /var/lib/apt/lists/*
+COPY src ./src
+RUN mkdir -p /var/lib/castro-x-md/sessions && chown -R node:node /var/lib/castro-x-md
+USER node
 
-RUN npm install && npm install -g pm2
-
-EXPOSE 9090
+EXPOSE 8080
+ENV PORT=8080
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||8080)+'/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 CMD ["npm", "start"]

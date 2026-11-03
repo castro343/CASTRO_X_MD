@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#080b12" />
+  <meta name="description" content="CASTRO X MD — manage your WhatsApp automation workspace." />
+  <title>CASTRO X MD — Dashboard</title>
+</head>
+<body>
+  <div id="app">
+    <header class="topbar"><a class="brand" href="#"><span class="brand-mark">X</span><span>CASTRO <b>X MD</b></span></a><span class="secure">● PRIVATE WORKSPACE</span></header>
+    <main>
+      <section id="auth-view" class="auth-layout">
+        <div class="intro"><div class="eyebrow">YOUR AUTOMATION COMMAND CENTER</div><h1>One workspace.<br><em>Every bot.</em></h1><p>Create and manage your WhatsApp automation sessions from one secure dashboard.</p><div class="feature-list"><span>✦ Individual bot sessions</span><span>✦ Secure account isolation</span><span>✦ Live connection controls</span></div></div>
+        <form id="auth-form" class="panel auth-panel">
+          <div class="eyebrow">WELCOME TO CASTRO X MD</div><h2 id="auth-title">Sign in</h2><p class="muted" id="auth-subtitle">Access your private workspace.</p>
+          <label>Email address<input id="email" type="email" autocomplete="email" required placeholder="you@example.com"></label>
+          <label>Password<input id="password" type="password" minlength="6" autocomplete="current-password" required placeholder="At least 6 characters"></label>
+          <button class="primary full" id="auth-submit">Sign in <span>→</span></button>
+          <button class="text-button" type="button" id="auth-toggle">New here? Create an account</button>
+          <p class="notice" id="auth-message" role="status"></p>
+        </form>
+      </section>
+      <section id="dashboard-view" hidden>
+        <div class="welcome-row"><div><div class="eyebrow">WORKSPACE OVERVIEW</div><h1>Your bots, <em>under control.</em></h1><p class="muted" id="user-email"></p></div><button class="outline" id="sign-out">Sign out ↗</button></div>
+        <div class="stats"><article class="stat"><span>Total bots</span><strong id="total-count">0</strong></article><article class="stat"><span>Connected</span><strong id="connected-count">0</strong></article><article class="stat"><span>Workspace</span><strong class="stat-small">PRIVATE</strong></article></div>
+        <div class="section-heading"><div><div class="eyebrow">YOUR DEPLOYMENT</div><h2>Bot management</h2></div><button class="primary" id="show-create">＋ Browse bot catalogue</button></div>
+        <form id="create-form" class="panel create-panel catalogue-panel" hidden><div class="eyebrow">AVAILABLE BOT</div><h3>CASTRO X MD · Core</h3><p class="muted">The official CASTRO X MD WhatsApp automation bot. Includes essential commands, group tools and configurable automation. More catalogue options will be added in later releases.</p><div class="catalogue-facts"><span>✓ One deployment per account</span><span>✓ Your own isolated WhatsApp session</span><span>✓ Configure settings after deployment</span></div><input id="bot-name" type="hidden" value="CASTRO X MD Core"><input id="bot-prefix" type="hidden" value="."><input id="bot-mode" type="hidden" value="public"><div class="actions"><button class="primary" type="submit">Deploy this bot →</button><button class="outline" type="button" id="cancel-create">Cancel</button></div><p class="notice" id="create-message"></p></form>
+        <div id="bot-list" class="bot-grid"></div>
+        <p class="notice" id="global-message" role="status"></p>
+        <footer>CASTRO X MD <span>Built for controlled, responsible automation.</span></footer>
+      </section>
+    </main>
+  </div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

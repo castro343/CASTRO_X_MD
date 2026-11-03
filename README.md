@@ -1,89 +1,34 @@
-<h1 align="center">
-  <img src="https://files.catbox.moe/8pfh7i.jpg" alt="CASTRO-MD" width="800" style="border-radius:25px;box-shadow:0 0 40px #C8860A;"/>
-</h1>
+# CASTRO X MD
 
-<a><img src='https://i.imgur.com/LyHic3i.gif'/></a>
+CASTRO X MD is a multi-user WhatsApp bot platform with a web dashboard and a separate persistent WhatsApp runtime.
 
-<!-- BADGES -->
-<p align="center">
-  <a href="https://github.com/Castro-tech/CASTRO-MD/stargazers/"><img title="Stars" src="https://img.shields.io/github/stars/Castro-tech/CASTRO-MD?color=F5A623&style=flat-square&logo=github&cacheSeconds=3600"/></a>
-  <a href="https://github.com/Castro-tech/CASTRO-MD/network/members"><img title="Forks" src="https://img.shields.io/github/forks/Castro-tech/CASTRO-MD?color=C8860A&style=flat-square&logo=github&cacheSeconds=3600"/></a>
-  <a href="https://github.com/Castro-tech/CASTRO-MD/"><img title="Size" src="https://img.shields.io/github/repo-size/Castro-tech/CASTRO-MD?style=flat-square&color=8B4513&cacheSeconds=3600"/></a>
-  <a href="https://github.com/Castro-tech/CASTRO-MD/graphs/commit-activity"><img height="20" src="https://img.shields.io/badge/Maintained%3F-yes-F5A623.svg"/></a>
-</p>
+## Project layout
 
-<a><img src='https://i.imgur.com/LyHic3i.gif'/></a>
+- `apps/dashboard` — Vite dashboard intended for Vercel.
+- `apps/runtime` — Node.js + Baileys API service. This must run continuously on a persistent Node.js host or VPS.
+- `supabase` — database schema and migrations (apply the migrations before connecting the runtime).
 
-<!-- DEVELOPER NAME -->
-<p align="center">
-  <a href="https://github.com/Castro-tech" target="_blank">
-    <img src="https://img.shields.io/badge/👨‍💻_DEVELOPER-CASTRO_TECH-F5A623?style=for-the-badge&logoColor=black&labelColor=1a1100"/>
-  </a>
-</p>
+## Runtime requirements
 
-<a><img src='https://i.imgur.com/LyHic3i.gif'/></a>
+- Node.js 22 or newer
+- Supabase project URL
+- Supabase service-role key (server-side only)
+- Stable `SESSION_ENCRYPTION_KEY` containing at least 32 bytes
+- Private Supabase Storage bucket for encrypted WhatsApp sessions
+- Exact dashboard origin in `DASHBOARD_ORIGINS`
 
-<!-- VIEWS COUNTER -->
-<p align="center">
-  <img src="https://komarev.com/ghpvc/?username=CASTRO-MD&label=TOTAL+VIEWS&style=for-the-badge&color=F5A623&labelColor=1a1100"/>
-</p>
+See [apps/runtime/README.md](apps/runtime/README.md) for the runtime API, environment variables, and security requirements.
 
-<a><img src='https://i.imgur.com/LyHic3i.gif'/></a>
+## Dashboard requirements
 
-<!-- CHANNEL UPDATE -->
-<p align="center">
-  <a href="https://whatsapp.com/channel/0029VbBmz4V5vKAIaWfYPT0C" target="_blank">
-    <img src="https://img.shields.io/badge/🔔_BOT_UPDATES-JOIN_CHANNEL_NOW-F5A623?style=for-the-badge&logo=whatsapp&logoColor=black&labelColor=1a1100"/>
-  </a>
-</p>
+Set `apps/dashboard` as the Vercel Root Directory. Configure `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, and `VITE_RUNTIME_API_URL` in the Vercel project. Never expose the Supabase service-role key or session encryption key to the browser.
 
-<a><img src='https://i.imgur.com/LyHic3i.gif'/></a>
+See [apps/dashboard/README.md](apps/dashboard/README.md) for setup details.
 
----
+## Deployment
 
-## 🔐 GET PAIR CODE
+The repository-root Dockerfile builds the dedicated service in `apps/runtime`. The WhatsApp process must run on a persistent host; Vercel is for the dashboard, not the always-on WhatsApp socket.
 
-<p align="center">
-  <a href="https://adeel-md-pair-1-50618ddd4ae2.herokuapp.com/" target="_blank">
-    <img src="https://img.shields.io/badge/🔑_GET_PAIR_CODE-CLICK_HERE-F5A623?style=for-the-badge&logoColor=black&labelColor=1a1100" width="300"/>
-  </a>
-</p>
+## Release status
 
-<p align="center"><b>Enter your number with country code — Example: <code>923001234567</code></b></p>
-
-<a><img src='https://i.imgur.com/LyHic3i.gif'/></a>
-
----
-
-## 🚀 DEPLOYMENT
-
-<div align="center">
-  <table>
-    <tr>
-      <td align="center" style="padding:15px;">
-        <a href="https://dashboard.heroku.com/new?template=https://github.com/Castro-tech/CASTRO-MD" target="_blank">
-          <img src="https://img.shields.io/badge/HEROKU-DEPLOY NOW-F5A623?style=for-the-badge&logo=heroku&logoColor=black&labelColor=1a1100" width="220" height="55"/>
-        </a>
-      </td>
-      <td align="center" style="padding:15px;">
-        <a href="https://adeel-md-vps.vercel.app/" target="_blank">
-          <img src="https://img.shields.io/badge/VPS-DEPLOY NOW-C8860A?style=for-the-badge&logo=virtualbox&logoColor=black&labelColor=1a1100" width="220" height="55"/>
-        </a>
-      </td>
-    </tr>
-  </table>
-</div>
-
-<a><img src='https://i.imgur.com/LyHic3i.gif'/></a>
-
----
-
-## ⭐ FORK & STAR
-
-<p align="center">
-  <a href="https://github.com/Castro-tech/CASTRO-MD/fork" target="_blank">
-    <img src="https://img.shields.io/badge/FORK-CASTRO%20MD-BOT?color=F5A623&style=for-the-badge&logo=stackshare&labelColor=1a1100"/>
-  </a>
-  &nbsp;&nbsp;
-  <a href="https://github.com/Castro-tech/CASTRO-MD" target="_blank">
-    <img src="htt
+This is an integration build, not a production-certified release. Pairing, recovery after forced restarts, Supabase migrations, dashboard integration, and real-account behavior must be tested end-to-end with a disposable WhatsApp account before production use. Baileys is an unofficial WhatsApp Web integration and WhatsApp account restrictions are possible.

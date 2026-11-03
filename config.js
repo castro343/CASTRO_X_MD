@@ -1,5 +1,6 @@
 const fs = require('fs');
-if (fs.existsSync('config.env')) require('dotenv').config({ path: './config.env' });
+if (fs.existsSync('.env')) require('dotenv').config({ path: './.env' });
+else if (fs.existsSync('config.env')) require('dotenv').config({ path: './config.env' });
 
 function convertToBool(text, fault = 'true') {
     return text === fault ? true : false;
@@ -44,7 +45,7 @@ module.exports = {
     // chose custom react emojis by yourself
     DELETE_LINKS: process.env.DELETE_LINKS || "false",
     // automatic delete links without removing member
-    OWNER_NUMBER: process.env.OWNER_NUMBER || "923035512967",
+    OWNER_NUMBER: process.env.OWNER_NUMBER || "",
     // add your bot owner number (replace with your real number)
     OWNER_NAME: process.env.OWNER_NAME || "CASTRO",
     // add bot owner name
@@ -74,7 +75,7 @@ module.exports = {
     // true for automatic show typing
     READ_CMD: process.env.READ_CMD || "false",
     // true if want mark commands as read
-    DEV: process.env.DEV || "923035512967",
+    DEV: process.env.DEV || "",
     // replace with your WhatsApp number
     ANTI_VV: process.env.ANTI_VV || "true",
     // true for anti once view
