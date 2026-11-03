@@ -59,7 +59,7 @@ export function attachCommandHandlers({ socket, bot, getUptime = () => process.u
         }
       } catch (error) {
         console.error("Command execution failed:", error?.message || error);
-        await socket.sendMessage(jid, { text: "⚠️ That command could not be completed. Please try again." }, { quoted: message });
+        const detail = String(error?.message || "");\n        const safe = /^(This command can only be used inside a WhatsApp group\\.|Only group administrators can use this command\\.|Make CASTRO X MD a group administrator first\\.|Mention a group member to continue\\.|Usage:)/.test(detail);\n        await socket.sendMessage(jid, { text: safe ? `⚠️ ${detail}` : "⚠️ That command could not be completed. Please try again." }, { quoted: message });
       }
     }
   });
