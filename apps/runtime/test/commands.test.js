@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { attachCommandHandlers, parseCommand } from "../src/commands.js";
+import { createCommandRegistry } from "../src/command-registry.js";
 
 function harness(prefix = ".") {
   let handler;
@@ -80,4 +81,40 @@ test("quotes the triggering message when replying", async () => {
   const message = { key: { remoteJid: "254700000001@s.whatsapp.net" }, message: { conversation: ".ping" } };
   await app.dispatch({ type: "notify", messages: [message] });
   assert.equal(app.sent[0][2].quoted, message);
+});
+
+
+test("loads additional command modules and resolves aliases", async () => {
+  let handler;
+  const sent = [];
+  const socket = {
+    ev: { on: (event, callback) => { if (event === "messages.upsert") handler = callback; } },
+    sendMessage: async (...args) => { sent.push(args); }
+  };
+  attachCommandHandlers({
+    socket,
+    bot: { prefix: "." },
+    commandModules: [[{
+      name: "echo",
+      aliases: ["say"],
+      category: "Utilities",
+      description: "Repeat text.",
+      execute: ({ args }) => ({ text: args.join(" ") })
+    }]]
+  });
+  await handler({ type: "notify", messages: [
+    { key: { remoteJid: "254700000001@s.whatsapp.net" }, message: { conversation: ".say hello from module" } }
+  ] });
+  assert.equal(sent[0][1].text, "hello from module");
+});
+
+test("rejects duplicate command names and aliases", () => {
+  assert.throws(() => createCommandRegistry([[
+    { name: "echo", execute: () => ({ text: "one" }) },
+    { name: "echo", execute: () => ({ text: "two" }) }
+  ]]), /Duplicate command name/);
+  assert.throws(() => createCommandRegistry([[
+    { name: "echo", aliases: ["repeat"], execute: () => ({ text: "one" }) },
+    { name: "repeat", execute: () => ({ text: "two" }) }
+  ]]), /Duplicate command name|Duplicate command alias/);
 });
