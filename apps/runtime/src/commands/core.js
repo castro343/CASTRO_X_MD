@@ -53,6 +53,27 @@ export const coreCommands = [
     })
   },
   {
+    name: "date",
+    category: "Utilities",
+    description: "Show the current date (UTC).",
+    execute: () => ({ text: `📅 Current date (UTC): ${new Date().toISOString().slice(0, 10)}` })
+  },
+  {
+    name: "time",
+    category: "Utilities",
+    description: "Show the current time (UTC).",
+    execute: () => ({ text: `🕒 Current time (UTC): ${new Date().toISOString().slice(11, 19)}` })
+  },
+  {
+    name: "jid",
+    aliases: ["chatid"],
+    category: "Utilities",
+    description: "Show the current chat and sender IDs.",
+    execute: ({ message }) => ({
+      text: `🆔 Chat ID: ${message?.key?.remoteJid || "Unknown"}\\nSender ID: ${message?.key?.participant || message?.key?.remoteJid || "Unknown"}`
+    })
+  },
+  {
     name: "menu",
     aliases: ["help"],
     category: "Core",
