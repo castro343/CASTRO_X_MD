@@ -66,7 +66,7 @@ function settingsMarkup(settings,mode){
  const s={...defaultSettings,...settings,features:{...defaultSettings.features,...(settings.features||{})}};
  const toggles=Object.entries(featureLabels).map(([k,v])=>`<label class="setting-toggle"><span>${v}</span><input type="checkbox" data-feature="${k}" ${s.features[k]?"checked":""}></label>`).join("");
  return `<div class="settings-heading"><div><div class="eyebrow">BOT CONFIGURATION</div><h3>Automation settings</h3></div></div>
- <label>Visibility<select data-mode><option value="private" ${mode==="private"?"selected":""}>Private — owner commands only</option><option value="public" ${mode==="public"?"selected":""}>Public — everyone can use commands</option></select></label>
+ <label>Visibility<select data-mode><option value="private" ${mode==="private"?"selected":""}>Private — direct messages only</option><option value="public" ${mode==="public"?"selected":""}>Public — everyone can use commands</option></select></label>
  <div class="settings-toggles">${toggles}</div>
  <label>Blocked words <small>Separate with commas</small><textarea data-badwords rows="2">${escapeHtml((s.badWords||[]).join(", "))}</textarea></label>
  <label>Bad-word action<select data-badword-action><option value="delete" ${s.badWordAction==="delete"?"selected":""}>Delete message</option><option value="warn" ${s.badWordAction==="warn"?"selected":""}>Delete and warn</option></select></label>
