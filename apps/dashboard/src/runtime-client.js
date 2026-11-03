@@ -45,3 +45,8 @@ export function reconnectBot(botId, accessToken) {
 export function disconnectBot(botId, accessToken) {
   return request(`/api/bots/${encodeURIComponent(botId)}/disconnect`, accessToken, { method: "POST", body: "{}" });
 }
+
+export function getBotSettings(botId, accessToken) { return request(`/api/bots/${encodeURIComponent(botId)}/settings`, accessToken); }
+export function saveBotSettings(botId, settings, mode, accessToken) {
+  return request(`/api/bots/${encodeURIComponent(botId)}/settings`, accessToken, { method:"PUT", body:JSON.stringify({settings,mode}) });
+}
