@@ -6,12 +6,13 @@ function getSetting(jid) {
   if (!groupSettings.has(jid)) groupSettings.set(jid, { antilink: true, welcome: false, goodbye: false });
   return groupSettings.get(jid);
 }
-function sender(message) { return message?.key?.participant || ""; }
+function normalizeJid(value) { return String(value || "").split(":")[0]; }
+function sender(message) { return normalizeJid(message?.key?.participant || ""); }
 
 async function isAdmin(socket, jid, userJid) {
   try {
     const meta = await socket.groupMetadata(jid);
-    return (meta.participants || []).some(p => p.id === userJid && p.admin);
+    return (meta.participants || []).some(p => normalizeJid(p.id) === normalizeJid(userJid) && p.admin);
   } catch { return false; }
 }
 
