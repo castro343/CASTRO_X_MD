@@ -112,6 +112,7 @@ export function attachModerationHandlers({ socket, bot }) {
       if (!feature(bot, "antidelete")) continue;
       const original = deletedCache.get(update.key?.id);
       if (!original || Date.now() - original.at > CACHE_TTL_MS) continue;
+      if (mode() === "private" && isGroup(original.jid)) continue;
       deletedCache.delete(update.key.id);
       const label = original.participant ? "A group message" : "A message";
       await socket.sendMessage(original.jid, { text: `🛡️ Anti-delete: ${label} was deleted.\\n\\n${original.text.slice(0, 3000)}` }).catch(() => {});
@@ -119,6 +120,7 @@ export function attachModerationHandlers({ socket, bot }) {
   });
 
   socket.ev.on("group-participants.update", async update => {
+    if (mode() === "private") return;
     const jid = update?.id;
     if (!isGroup(jid)) return;
     const members = update.participants || [];
