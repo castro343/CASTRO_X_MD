@@ -55,7 +55,7 @@ export function attachCommandHandlers({ socket, bot, getUptime = () => process.u
           commands: commands.list()
         });
         if (result?.text) {
-          await socket.sendMessage(jid, { text: result.text }, { quoted: message });
+          await socket.sendMessage(jid, { text: result.text, ...(Array.isArray(result.mentions) ? { mentions: result.mentions } : {}) }, { quoted: message });
         }
       } catch (error) {
         console.error("Command execution failed:", error?.message || error);
