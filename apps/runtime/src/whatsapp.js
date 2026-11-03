@@ -1,14 +1,14 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
-import makeWASocket, { fetchLatestBaileysVersion, DisconnectReason, makeCacheableSignalKeyStore } from "@whiskeysockets/baileys";
+import makeWASocket, { fetchLatestWaWebVersion, DisconnectReason, makeCacheableSignalKeyStore } from "@whiskeysockets/baileys";
 import { attachCommandHandlers } from "./commands.js";
 import { attachModerationHandlers } from "./moderation.js";
 import pino from "pino";
 import { EncryptedAuthStore } from "./encrypted-auth-store.js";
 
 export class WhatsAppSessionManager {
-  constructor({ supabase, encryptionKey, sessionDir, sessionBucket = null, authStoreFactory = options => new EncryptedAuthStore(options), versionFetcher = fetchLatestBaileysVersion, socketFactory = makeWASocket, signalKeyStoreFactory = makeCacheableSignalKeyStore }) {
+  constructor({ supabase, encryptionKey, sessionDir, sessionBucket = null, authStoreFactory = options => new EncryptedAuthStore(options), versionFetcher = fetchLatestWaWebVersion, socketFactory = makeWASocket, signalKeyStoreFactory = makeCacheableSignalKeyStore }) {
     this.supabase = supabase;
     this.encryptionKey = encryptionKey;
     this.sessionDir = sessionDir;
@@ -106,7 +106,7 @@ export class WhatsAppSessionManager {
       generateHighQualityLinkPreview: false,
       markOnlineOnConnect: false
     });
-    const record = { socket, connected: false, pairingCode: null, pairingExpiresAt: null, pairingTimer: null, intentionalClose: false, closed: false, closeError: null, bot, creds: state.creds };
+    const record = { socket, connected: false, pairingCode: null, pairingExpiresAt: null, pairingTimer: null, intentionalClose: false, closed: false, closeError: null, qrReceived: false, bot, creds: state.creds };
     this.sockets.set(bot.id, record);
     attachCommandHandlers({ socket, bot });
     bot.settings ||= {};
@@ -119,6 +119,7 @@ export class WhatsAppSessionManager {
     socket.ev.on("connection.update", async update => {
       try {
         if (this.sockets.get(bot.id) !== record) return;
+        if (update.qr) record.qrReceived = true;
         if (update.connection === "open") {
           record.connected = true;
           record.pairingCode = null;
@@ -225,41 +226,42 @@ export class WhatsAppSessionManager {
     const ws = record.socket?.ws;
     if (!ws) throw new Error("WhatsApp websocket is unavailable; pairing cannot safely continue");
     if (record.closed || ws.readyState === 3) {
-      throw new Error("WhatsApp websocket closed before it became ready");
+      throw new Error("WhatsApp websocket closed before pairing became ready");
     }
-    if (ws.readyState === 1) return;
+    // A raw websocket "open" only confirms the transport. Baileys emits a QR
+    // update after its WhatsApp handshake is ready; request the pairing code
+    // only after that signal (or an already-open authenticated connection).
+    if (record.qrReceived || record.connected) return;
 
     await new Promise((resolve, reject) => {
       let settled = false;
-      const finish = (error) => {
+      const finish = error => {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
-        ws.removeListener?.("open", onOpen);
-        ws.removeListener?.("error", onError);
-        ws.removeListener?.("close", onClose);
         record.socket.ev.removeListener?.("connection.update", onConnectionUpdate);
         if (error) reject(error);
         else resolve();
       };
-      const onOpen = () => finish();
-      const onError = error => finish(new Error(`WhatsApp websocket failed to open: ${error?.message || "unknown error"}`));
-      const onClose = () => finish(new Error("WhatsApp websocket closed before it became ready"));
       const onConnectionUpdate = update => {
+        if (update.qr || update.connection === "open") finish();
         if (update.connection === "close") {
           const code = update.lastDisconnect?.error?.output?.statusCode;
-          finish(new Error(code ? `WhatsApp closed during pairing startup (code ${code})` : "WhatsApp closed during pairing startup"));
+          finish(new Error(code
+            ? `WhatsApp closed during pairing handshake (code ${code})`
+            : "WhatsApp closed during pairing handshake"));
         }
       };
-      const timer = setTimeout(() => finish(new Error("Timed out waiting for WhatsApp websocket readiness")), timeoutMs);
+      const timer = setTimeout(
+        () => finish(new Error("Timed out waiting for WhatsApp's pairing handshake; no QR-ready signal was received")),
+        timeoutMs
+      );
       timer.unref?.();
-      ws.once?.("open", onOpen);
-      ws.once?.("error", onError);
-      ws.once?.("close", onClose);
       record.socket.ev.on("connection.update", onConnectionUpdate);
-      // Re-check after listeners are installed to avoid missing a fast open event.
-      if (ws.readyState === 1) finish();
-      else if (record.closed || ws.readyState === 3) onClose();
+      if (record.qrReceived || record.connected) finish();
+      else if (record.closed || ws.readyState === 3) {
+        finish(new Error("WhatsApp websocket closed before pairing became ready"));
+      }
     });
   }
 
