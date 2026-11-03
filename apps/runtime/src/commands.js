@@ -30,6 +30,27 @@ export function attachCommandHandlers({ socket, bot, getUptime = () => process.u
     ? createCommandRegistry([coreCommands, groupCommands, ...commandModules])
     : registry;
 
+  socket.ev.on("group-participants.update", async update => {
+    const jid = update?.id || "";
+    if (!jid.endsWith("@g.us")) return;
+    const settings = groupFeatureSettings.get(jid) || {};
+    const action = update.action;
+    const ids = (update.participants || []).filter(id => typeof id === "string");
+    if (!ids.length) return;
+    if (action === "add" && settings.welcome) {
+      await socket.sendMessage(jid, {
+        text: `👋 Welcome ${ids.map(id => "@" + id.split("@")[0].split(":")[0]).join(", ")}! Please read the group description and enjoy your stay.\n\n— CASTRO X MD`,
+        mentions: ids
+      }).catch(error => console.warn("Welcome message failed:", error?.message || error));
+    }
+    if ((action === "remove" || action === "leave") && settings.goodbye) {
+      await socket.sendMessage(jid, {
+        text: `👋 ${ids.map(id => "@" + id.split("@")[0].split(":")[0]).join(", ")} has left the group. Take care!\n\n— CASTRO X MD`,
+        mentions: ids
+      }).catch(error => console.warn("Goodbye message failed:", error?.message || error));
+    }
+  });
+
   socket.ev.on("messages.upsert", async ({ messages, type }) => {
     if (type !== "notify") return;
     for (const message of messages || []) {
