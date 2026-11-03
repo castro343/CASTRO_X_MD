@@ -63,3 +63,51 @@ test("writes auth files with owner-only permissions", async () => {
     await fixture.cleanup();
   }
 });
+
+
+test("persists encrypted auth data to isolated remote storage and restores it", async () => {
+  let remote = null;
+  const storage = {
+    list: async () => ({ data: remote ? [{ name: "auth.enc" }] : [], error: null }),
+    download: async () => ({ data: remote ? new Blob([remote]) : null, error: null }),
+    upload: async (_path, payload) => { remote = Buffer.from(payload); return { error: null }; },
+    remove: async () => { remote = null; return { error: null }; }
+  };
+  const options = {
+    directory: null,
+    encryptionKey: "remote-test-encryption-key-that-is-long",
+    storage,
+    objectPath: "sessions/account-hash/auth.enc"
+  };
+  const first = new EncryptedAuthStore(options);
+  const loaded = await first.load();
+  loaded.state.creds.registered = true;
+  await loaded.saveCreds();
+  assert.ok(remote);
+  assert.equal(remote.subarray(0, 4).toString(), "CXM1");
+  assert.equal(remote.includes(Buffer.from("registered")), false);
+
+  const second = new EncryptedAuthStore(options);
+  const restored = await second.load();
+  assert.equal(restored.state.creds.registered, true);
+  await second.remove();
+  assert.equal(remote, null);
+});
+
+test("does not replace a remote auth object when storage download fails", async () => {
+  let uploads = 0;
+  const storage = {
+    list: async () => ({ data: [{ name: "auth.enc" }], error: null }),
+    download: async () => ({ data: null, error: new Error("temporary storage outage") }),
+    upload: async () => { uploads++; return { error: null }; },
+    remove: async () => ({ error: null })
+  };
+  const store = new EncryptedAuthStore({
+    directory: null,
+    encryptionKey: "remote-test-encryption-key-that-is-long",
+    storage,
+    objectPath: "sessions/account-hash/auth.enc"
+  });
+  await assert.rejects(store.load(), /Unable to decrypt WhatsApp session/);
+  assert.equal(uploads, 0);
+});
