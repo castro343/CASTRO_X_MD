@@ -146,3 +146,112 @@ test("does not create a socket when shutdown invalidates an in-flight startup", 
   assert.equal(socketCreations, 0);
   assert.equal(manager.sockets.size, 0);
 });
+
+
+test("waits for the WhatsApp websocket open event before requesting a pairing code", async () => {
+  const { EventEmitter } = await import("node:events");
+  const ws = new EventEmitter();
+  ws.readyState = 0;
+  const ev = new EventEmitter();
+  let requested = false;
+  const socket = {
+    ws,
+    ev,
+    requestPairingCode: async phone => {
+      assert.equal(ws.readyState, 1);
+      assert.equal(phone, "254700000000");
+      requested = true;
+      return "ABCD-EFGH";
+    },
+    end() {}
+  };
+  const supabase = {
+    from() {
+      return {
+        upsert: async () => ({ error: null }),
+        update() {
+          return {
+            eq() {
+              return { eq: async () => ({ error: null }) };
+            }
+          };
+        }
+      };
+    }
+  };
+  const manager = new WhatsAppSessionManager({
+    supabase,
+    encryptionKey: "test-key",
+    sessionDir: "/tmp/castro-x-md-pairing-test",
+    authStoreFactory: () => ({
+      load: async () => ({ state: { creds: { registered: false }, keys: {} }, saveCreds: async () => {} }),
+      remove: async () => {}
+    }),
+    versionFetcher: async () => ({ version: [2, 3000, 0] }),
+    socketFactory: () => {
+      setTimeout(() => {
+        ws.readyState = 1;
+        ws.emit("open");
+      }, 15);
+      return socket;
+    },
+    signalKeyStoreFactory: keys => keys
+  });
+
+  const result = await manager.requestPairingCode(
+    { id: "bot-pair-ready", owner_id: "user-1" },
+    "254700000000"
+  );
+
+  assert.equal(result.code, "ABCD-EFGH");
+  assert.equal(requested, true);
+  assert.equal(manager.sockets.get("bot-pair-ready").pairingCode, "ABCD-EFGH");
+  await manager.shutdown();
+});
+
+test("fails pairing promptly when WhatsApp closes before websocket readiness", async () => {
+  const { EventEmitter } = await import("node:events");
+  const ws = new EventEmitter();
+  ws.readyState = 0;
+  const ev = new EventEmitter();
+  const supabase = {
+    from() {
+      return {
+        upsert: async () => ({ error: null }),
+        update() {
+          return {
+            eq() {
+              return { eq: async () => ({ error: null }) };
+            }
+          };
+        }
+      };
+    }
+  };
+  const manager = new WhatsAppSessionManager({
+    supabase,
+    encryptionKey: "test-key",
+    sessionDir: "/tmp/castro-x-md-pairing-close-test",
+    authStoreFactory: () => ({
+      load: async () => ({ state: { creds: { registered: false }, keys: {} }, saveCreds: async () => {} }),
+      remove: async () => {}
+    }),
+    versionFetcher: async () => ({ version: [2, 3000, 0] }),
+    socketFactory: () => ({ ws, ev, requestPairingCode: async () => "NEVER", end() {} }),
+    signalKeyStoreFactory: keys => keys
+  });
+
+  const request = manager.requestPairingCode(
+    { id: "bot-pair-close", owner_id: "user-1" },
+    "254700000000"
+  );
+  await new Promise(resolve => setTimeout(resolve, 10));
+  ev.emit("connection.update", {
+    connection: "close",
+    lastDisconnect: { error: Object.assign(new Error("closed"), { output: { statusCode: 428 } }) }
+  });
+
+  await assert.rejects(request, /closed during pairing startup/);
+  assert.equal(manager.sockets.has("bot-pair-close"), false);
+  await manager.shutdown();
+});
