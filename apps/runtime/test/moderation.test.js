@@ -84,3 +84,10 @@ test("anti-delete restores a cached message only within its own session", async 
   assert.equal(app.sent.length, 1);
   assert.match(app.sent[0][1].text, /message to restore/);
 });
+
+
+test("private mode suppresses group participant automation", async () => {
+  const app = harness({ mode: "private", settings: { features: { welcome: true } } });
+  await app.emit("group-participants.update", { id: "123@g.us", action: "add", participants: ["254700000001@s.whatsapp.net"] });
+  assert.equal(app.sent.length, 0);
+});
