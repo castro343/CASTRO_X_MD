@@ -1,36 +1,34 @@
 # CASTRO X MD
 
-CASTRO X MD is a Node.js WhatsApp bot project. The bot runtime currently starts from the repository-root `index.js`.
+CASTRO X MD is a multi-user WhatsApp bot platform with a web dashboard and a separate persistent WhatsApp runtime.
 
-## Requirements
+## Project layout
 
-- Node.js 24 or newer
-- npm 10 or newer
-- A persistent server/container for the WhatsApp process
-- A WhatsApp account that you control
+- `apps/dashboard` — Vite dashboard intended for Vercel.
+- `apps/runtime` — Node.js + Baileys API service. This must run continuously on a persistent Node.js host or VPS.
+- `supabase` — database schema and migrations (apply the migrations before connecting the runtime).
 
-## Local setup
+## Runtime requirements
 
-1. Clone this repository.
-2. Install dependencies with `npm install`.
-3. Copy `.env.example` to `.env` or configure the variables in your hosting provider.
-4. Set your own `OWNER_NUMBER` and other required settings. Use international format without a leading plus sign.
-5. Start the bot with `npm start`.
+- Node.js 22 or newer
+- Supabase project URL
+- Supabase service-role key (server-side only)
+- Stable `SESSION_ENCRYPTION_KEY` containing at least 32 bytes
+- Private Supabase Storage bucket for encrypted WhatsApp sessions
+- Exact dashboard origin in `DASHBOARD_ORIGINS`
 
-Do not commit `.env`, `config.env`, WhatsApp credentials, session folders, or API keys.
+See [apps/runtime/README.md](apps/runtime/README.md) for the runtime API, environment variables, and security requirements.
 
-## Configuration
+## Dashboard requirements
 
-The sample environment file contains the supported configuration names and safe defaults. Set owner-specific values yourself; this repository intentionally does not ship with another person's WhatsApp number as the default owner.
+Set `apps/dashboard` as the Vercel Root Directory. Configure `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, and `VITE_RUNTIME_API_URL` in the Vercel project. Never expose the Supabase service-role key or session encryption key to the browser.
 
-## Deployment notes
+See [apps/dashboard/README.md](apps/dashboard/README.md) for setup details.
 
-The Dockerfile uses Node.js 24 and copies the repository-root runtime files, matching the current `index.js` entry point and `npm start` script.
+## Deployment
 
-**Important:** WhatsApp authentication data must be stored on persistent storage supplied by the hosting platform. A normal ephemeral container filesystem can lose sessions during redeployments or restarts. Confirm the bot's actual authentication storage path and mount a persistent disk there before treating a deployment as production-ready.
+The repository-root Dockerfile builds the dedicated service in `apps/runtime`. The WhatsApp process must run on a persistent host; Vercel is for the dashboard, not the always-on WhatsApp socket.
 
-Vercel is suitable for the web dashboard, not for running the always-on WhatsApp socket process. Run the bot process on a persistent Node.js host or VPS.
+## Release status
 
-## Project status
-
-Pairing, reconnect behavior, multi-user session isolation, dashboard-to-runtime integration, and production uptime still require end-to-end verification against a real WhatsApp account. A successful build alone does not prove that WhatsApp pairing or session persistence works.
+This is an integration build, not a production-certified release. Pairing, recovery after forced restarts, Supabase migrations, dashboard integration, and real-account behavior must be tested end-to-end with a disposable WhatsApp account before production use. Baileys is an unofficial WhatsApp Web integration and WhatsApp account restrictions are possible.
