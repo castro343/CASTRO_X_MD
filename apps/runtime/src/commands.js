@@ -52,7 +52,7 @@ export function parseCommand(text, prefix) {
   if (!input.startsWith(prefix)) return null;
   const body = input.slice(prefix.length).trim();
   if (!body) return null;
-  const [name, ...args] = body.split(/\\s+/);
+  const [name, ...args] = body.split(/\s+/);
   return { name: name.toLowerCase(), args };
 }
 
