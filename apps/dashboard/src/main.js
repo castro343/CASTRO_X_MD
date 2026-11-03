@@ -42,7 +42,7 @@ async function loadBots() {
         <button class="outline" data-action="disconnect">Disconnect</button><button class="outline" data-action="settings">⚙ Settings</button>
       </div>
       <div class="pair-box" data-pair-box hidden></div><div class="settings-box" data-settings-box hidden></div>
-    </article>`).join("") : '<div class="panel bot-card"><h3>No bots yet</h3><p class="muted">Create your first bot instance to get started.</p></div>';
+    </article>`).join("") : '<div class="panel bot-card"><h3>No bots yet</h3><p class="muted">Browse the catalogue and deploy CASTRO X MD Core to get started.</p></div>';
 }
 
 async function refreshOne(card) {
@@ -165,14 +165,14 @@ $("create-form").addEventListener("submit", async event => {
   if (bots.length >= 1) { message("create-message", "Each account can deploy one bot. Manage your existing bot instead."); $("create-form").hidden = true; $("show-create").hidden = true; return; }
   submit.disabled = true;
   submit.textContent = "Creating…";
-  message("create-message", "Saving your bot instance…");
+  message("create-message", "Deploying CASTRO X MD Core to your workspace…");
   message("global-message");
   try {
     const payload = {
       owner_id: session.user.id,
-      bot_name: $("bot-name").value.trim(),
-      prefix: $("bot-prefix").value.trim() || ".",
-      mode: $("bot-mode").value,
+      bot_name: "CASTRO X MD Core",
+      prefix: ".",
+      mode: "public",
       status: "not_connected"
     };
     const { data, error } = await supabase.from("bot_instances").insert(payload).select("id,bot_name,prefix,mode,status,created_at").single();
@@ -185,14 +185,14 @@ $("create-form").addEventListener("submit", async event => {
     $("bot-prefix").value = ".";
     $("create-form").hidden = true;
     await loadBots();
-    message("global-message", "Bot instance created successfully. It is not connected to WhatsApp yet.");
+    message("global-message", "CASTRO X MD Core deployed successfully. Your isolated WhatsApp session is ready to connect.");
   } catch (error) {
     console.error("Bot creation failed:", error);
     const detail = error?.message || error?.details || error?.hint || "Unknown database or network error.";
     message("create-message", `Could not create bot: ${detail}`);
   } finally {
     submit.disabled = false;
-    submit.textContent = "Create instance";
+    submit.textContent = "Deploy this bot →";
   }
 });
 
