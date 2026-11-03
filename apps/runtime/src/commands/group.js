@@ -1,3 +1,5 @@
+export const groupFeatureSettings = new Map();
+
 function isGroupJid(jid) {
   return typeof jid === "string" && jid.endsWith("@g.us");
 }
@@ -174,6 +176,23 @@ export const groupCommands = [
       await requireAdmin(socket, jid, message);
       await socket.groupSettingUpdate(jid, "not_announcement");
       return { text: "🔓 Group unlocked. All members can send messages." };
+    }
+  },
+
+
+  {
+    name: "antilink", aliases: ["linkguard"], category: "Moderation",
+    description: "Enable or disable automatic link removal in this group (admin only).",
+    execute: async ({ socket, message, args }) => {
+      const jid = requireGroup(message);
+      await requireAdmin(socket, jid, message);
+      const choice = String(args[0] || "").toLowerCase();
+      if (!["on", "off", "status"].includes(choice)) throw new Error("Usage: antilink on | off | status");
+      const settings = groupFeatureSettings.get(jid) || {};
+      if (choice === "status") return { text: `🔗 Anti-link is currently ${settings.antiLink ? "ON" : "OFF"} in this group.` };
+      settings.antiLink = choice === "on";
+      groupFeatureSettings.set(jid, settings);
+      return { text: settings.antiLink ? "🛡️ Anti-link enabled. Non-admin link posts will be removed." : "🔓 Anti-link disabled." };
     }
   },
 
