@@ -1,5 +1,5 @@
 import { coreCommands } from "./commands/core.js";
-import { groupCommands } from "./commands/group.js";
+import { groupCommands, groupFeatureSettings } from "./commands/group.js";
 import { createCommandRegistry } from "./command-registry.js";
 
 const registry = createCommandRegistry([coreCommands, groupCommands]);
@@ -29,6 +29,29 @@ export function attachCommandHandlers({ socket, bot, getUptime = () => process.u
   const commands = commandModules.length
     ? createCommandRegistry([coreCommands, groupCommands, ...commandModules])
     : registry;
+
+  socket.ev.on("messages.upsert", async ({ messages, type }) => {
+    if (type !== "notify") return;
+    for (const message of messages || []) {
+      const jid = message?.key?.remoteJid || "";
+      if (!jid.endsWith("@g.us") || message.key?.fromMe || jid === "status@broadcast") continue;
+      if (!groupFeatureSettings.get(jid)?.antiLink) continue;
+      const text = extractText(message);
+      if (!/(https?:\/\/|www\.|chat\.whatsapp\.com\/|t\.me\/|bit\.ly\/)/i.test(text)) continue;
+      try {
+        const metadata = await socket.groupMetadata(jid);
+        const sender = message.key?.participant || "";
+        const botId = String(socket.user?.id || "").split(":")[0].split("@")[0];
+        const senderIsAdmin = metadata.participants?.some(p => p.id === sender && p.admin);
+        const botIsAdmin = metadata.participants?.some(p => String(p.id || "").split(":")[0].split("@")[0] === botId && p.admin);
+        if (senderIsAdmin || !botIsAdmin) continue;
+        await socket.sendMessage(jid, { delete: message.key });
+        await socket.sendMessage(jid, { text: "🚫 Links are not allowed in this group. Your message was removed." });
+      } catch (error) {
+        console.warn("Anti-link moderation failed:", error?.message || error);
+      }
+    }
+  });
 
   socket.ev.on("messages.upsert", async ({ messages, type }) => {
     if (type !== "notify") return;
