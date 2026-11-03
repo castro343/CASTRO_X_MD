@@ -1,5 +1,5 @@
 import { coreCommands } from "./commands/core.js";
-import { groupCommands, groupFeatureSettings } from "./commands/group.js";
+import { groupCommands } from "./commands/group.js";
 import { moderationCommands } from "./moderation.js";
 import { createCommandRegistry } from "./command-registry.js";
 
