@@ -9,7 +9,7 @@
   },
   "scripts": {
     "start": "node src/server.js",
-    "check": "node --check src/server.js && node --check src/whatsapp.js && node --check src/encrypted-auth-store.js && node --check src/commands.js && node --check src/command-registry.js && node --check src/commands/core.js",
+    "check": "node --check src/server.js && node --check src/whatsapp.js && node --check src/encrypted-auth-store.js && node --check src/commands.js && node --check src/command-registry.js && node --check src/commands/core.js && node --check src/commands/group.js",
     "test": "node --test"
   },
   "dependencies": {
