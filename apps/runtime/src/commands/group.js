@@ -154,5 +154,27 @@ export const groupCommands = [
       await socket.groupRevokeInvite(jid);
       return { text: "✅ Group invite link has been reset." };
     }
-  }
+  },
+
+  {
+    name: "lock", aliases: ["closegroup"], category: "Group",
+    description: "Allow only group admins to send messages.",
+    execute: async ({ socket, message }) => {
+      const jid = requireGroup(message);
+      await requireAdmin(socket, jid, message);
+      await socket.groupSettingUpdate(jid, "announcement");
+      return { text: "🔒 Group locked. Only administrators can send messages." };
+    }
+  },
+  {
+    name: "unlock", aliases: ["opengroup"], category: "Group",
+    description: "Allow all group members to send messages.",
+    execute: async ({ socket, message }) => {
+      const jid = requireGroup(message);
+      await requireAdmin(socket, jid, message);
+      await socket.groupSettingUpdate(jid, "not_announcement");
+      return { text: "🔓 Group unlocked. All members can send messages." };
+    }
+  },
+
 ];
