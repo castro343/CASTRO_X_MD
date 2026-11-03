@@ -10,6 +10,7 @@ const $ = id => document.getElementById(id);
 let session = null;
 let bots = [];
 let signupMode = false;
+const pairingTimers = new Map();
 
 function normalizeWhatsAppPhone(value) {
   let digits = String(value || "").split("").filter(ch => ch >= "0" && ch <= "9").join("");
@@ -52,7 +53,46 @@ async function refreshOne(card) {
   const bot = bots.find(item => item.id === botId);
   if (bot) bot.status = status;
   $("connected-count").textContent = bots.filter(item => item.status === "connected").length;
+  if (status === "pairing" && result.pairingCode) renderPairingCode(card, result.pairingCode, result.pairingExpiresAt);
+  if (status === "connected") clearPairingTimer(botId);
   return result;
+}
+
+function clearPairingTimer(botId) {
+  const timer = pairingTimers.get(botId);
+  if (timer) clearInterval(timer);
+  pairingTimers.delete(botId);
+}
+
+function renderPairingCode(card, code, expiresAt) {
+  const botId = card.dataset.bot;
+  const box = card.querySelector("[data-pair-box]");
+  const expiry = expiresAt ? new Date(expiresAt).getTime() : Date.now() + 25 * 60_000;
+  clearPairingTimer(botId);
+  box.hidden = false;
+  box.innerHTML = `
+    <div class="eyebrow">CASTRO X MD · PAIRING CODE</div>
+    <div class="pair-code">${escapeHtml(code || "Code unavailable")}</div>
+    <p class="muted">On your phone, open WhatsApp → Linked devices → Link a device → Link with phone number. Enter this code there. Never share it with anyone.</p>
+    <p class="notice" data-pair-countdown role="status"></p>
+    <div class="actions" data-expired-action hidden><button class="primary" type="button" data-action="pair">Request a new code</button></div>
+  `;
+  const countdown = box.querySelector("[data-pair-countdown]");
+  const expiredAction = box.querySelector("[data-expired-action]");
+  const tick = () => {
+    const remaining = Math.max(0, expiry - Date.now());
+    if (remaining <= 0) {
+      countdown.textContent = "This pairing code has expired. Request a new code to continue.";
+      expiredAction.hidden = false;
+      clearPairingTimer(botId);
+      return;
+    }
+    const minutes = Math.floor(remaining / 60_000);
+    const seconds = Math.floor((remaining % 60_000) / 1000);
+    countdown.textContent = `Waiting for WhatsApp to finish linking · Expires in ${String(minutes).padStart(2,"0")}:${String(seconds).padStart(2,"0")}`;
+  };
+  tick();
+  if (expiry > Date.now()) pairingTimers.set(botId, setInterval(tick, 1000));
 }
 
 $("auth-form").addEventListener("submit", async event => {
@@ -144,12 +184,7 @@ $("bot-list").addEventListener("submit", async event => {
   status.textContent = "Requesting a secure pairing code…";
   try {
     const result = await requestBotPairingCode(botId, normalizeWhatsAppPhone(rawPhone), token());
-    form.innerHTML = `
-      <div class="eyebrow">PAIRING CODE</div>
-      <div class="pair-code">${escapeHtml(result.code || "Code unavailable")}</div>
-      <p class="muted">On your phone, open WhatsApp → Linked devices → Link a device → Link with phone number. Enter this code there. Do not share it with anyone.</p>
-      <p class="notice" data-pair-message>Waiting for WhatsApp to finish linking…</p>
-    `;
+    renderPairingCode(card, result.code, result.pairingExpiresAt);
     await refreshOne(card);
     message("global-message", "Pairing code generated. Finish linking inside WhatsApp on your phone.");
   } catch (error) {
