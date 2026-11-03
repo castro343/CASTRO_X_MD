@@ -92,7 +92,7 @@ export const coreCommands = [
 ];
 
 function safeLabel(value, fallback) {
-  const text = String(value || "").trim().replace(/[\\r\n]/g, " ").slice(0, 48);
+  const text = String(value || "").trim().replace(/[\r\n]/g, " ").slice(0, 48);
   return text || fallback;
 }
 
