@@ -138,14 +138,14 @@ app.get("/api/bots/:botId/settings", authenticate, ownedBot, (req, res) => {
   res.json({ settings: req.bot.settings || {} });
 });
 app.put("/api/bots/:botId/settings", authenticate, ownedBot, async (req, res) => {
-  const parsed = z.object({ settings: z.record(z.string(), z.unknown()) }).safeParse(req.body);
+  const parsed = z.object({ settings: z.record(z.string(), z.unknown()), mode: z.enum(["private", "public"]).optional() }).safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Invalid feature settings." });
   const settings = sanitizeSettings(parsed.data.settings);
-  const { error } = await supabase.from("bot_instances").update({ settings })
+  const { error } = await supabase.from("bot_instances").update({ settings, ...(parsed.data.mode ? { mode: parsed.data.mode } : {}) })
     .eq("id", req.bot.id).eq("owner_id", req.user.id);
   if (error) return res.status(503).json({ error: "Could not save feature settings." });
   const active = sessions.sockets.get(req.bot.id);
-  if (active) active.bot.settings = settings;
+  if (active) { active.bot.settings = settings; if (parsed.data.mode) active.bot.mode = parsed.data.mode; }
   res.json({ ok: true, settings });
 });
 
