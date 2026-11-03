@@ -29,6 +29,7 @@ async function loadBots() {
   if (error) throw error;
   bots = data || [];
   $("total-count").textContent = bots.length;
+  $("show-create").hidden = bots.length >= 1;
   $("connected-count").textContent = bots.filter(bot => bot.status === "connected").length;
   $("bot-list").innerHTML = bots.length ? bots.map(bot => `
     <article class="bot-card" data-bot="${escapeHtml(bot.id)}">
@@ -69,12 +70,12 @@ function settingsMarkup(settings,mode){
  <div class="settings-toggles">${toggles}</div>
  <label>Blocked words <small>Separate with commas</small><textarea data-badwords rows="2">${escapeHtml((s.badWords||[]).join(", "))}</textarea></label>
  <label>Bad-word action<select data-badword-action><option value="delete" ${s.badWordAction==="delete"?"selected":""}>Delete message</option><option value="warn" ${s.badWordAction==="warn"?"selected":""}>Delete and warn</option></select></label>
- <label>Auto-replies <small>One per line: keyword = reply</small><textarea data-autoreplies rows="4">${escapeHtml((s.autoReplies||[]).map(x=>x.keyword+" = "+x.response).join("\\n"))}</textarea></label>
- <label>Custom reactions <small>One per line: keyword = emoji</small><textarea data-reactions rows="3">${escapeHtml(Object.entries(s.reactions||{}).map(([k,v])=>k+" = "+v).join("\\n"))}</textarea></label>
+ <label>Auto-replies <small>One per line: keyword = reply</small><textarea data-autoreplies rows="4">${escapeHtml((s.autoReplies||[]).map(x=>x.keyword+" = "+x.response).join("\n"))}</textarea></label>
+ <label>Custom reactions <small>One per line: keyword = emoji</small><textarea data-reactions rows="3">${escapeHtml(Object.entries(s.reactions||{}).map(([k,v])=>k+" = "+v).join("\n"))}</textarea></label>
  <label>Status reaction emoji<input data-status-reaction maxlength="8" value="${escapeHtml(s.statusReaction||"❤️")}"></label>
  <div class="actions"><button class="primary" type="button" data-action="save-settings">Save settings</button><button class="outline" type="button" data-action="close-settings">Close</button></div><p class="notice" data-settings-message role="status"></p>`;
 }
-function parsePairs(value){return String(value||"").split("\\n").map(line=>line.split("=")).filter(p=>p.length>=2).map(p=>[p.shift().trim(),p.join("=").trim()]).filter(([k,v])=>k&&v);}
+function parsePairs(value){return String(value||"").split("\n").map(line=>line.split("=")).filter(p=>p.length>=2).map(p=>[p.shift().trim(),p.join("=").trim()]).filter(([k,v])=>k&&v);}
 async function openSettings(card){const box=card.querySelector("[data-settings-box]"),bot=bots.find(x=>x.id===card.dataset.bot);box.hidden=false;box.innerHTML='<p class="muted">Loading settings…</p>';try{const r=await getBotSettings(card.dataset.bot,token());box.innerHTML=settingsMarkup(r.settings||defaultSettings,bot?.mode||"private");}catch(e){box.innerHTML=`<p class="notice">${escapeHtml(e.message||"Could not load settings.")}</p>`;}}
 async function saveSettings(card,button){const box=card.querySelector("[data-settings-box]"),q=s=>box.querySelector(s),features={};box.querySelectorAll("[data-feature]").forEach(x=>features[x.dataset.feature]=x.checked);
  const settings={features,badWords:q("[data-badwords]").value.split(",").map(x=>x.trim()).filter(Boolean),badWordAction:q("[data-badword-action]").value,autoReplies:parsePairs(q("[data-autoreplies]").value).map(([keyword,response])=>({keyword,response,enabled:true})),reactions:Object.fromEntries(parsePairs(q("[data-reactions]").value)),statusReaction:q("[data-status-reaction]").value.trim()||"❤️"};
@@ -161,6 +162,7 @@ $("create-form").addEventListener("submit", async event => {
   event.preventDefault();
   const submit = $("create-form").querySelector('button[type="submit"]');
   if (!session?.user) { message("create-message", "Your session has expired. Sign out and sign in again."); return; }
+  if (bots.length >= 1) { message("create-message", "Each account can deploy one bot. Manage your existing bot instead."); $("create-form").hidden = true; $("show-create").hidden = true; return; }
   submit.disabled = true;
   submit.textContent = "Creating…";
   message("create-message", "Saving your bot instance…");
@@ -174,7 +176,10 @@ $("create-form").addEventListener("submit", async event => {
       status: "not_connected"
     };
     const { data, error } = await supabase.from("bot_instances").insert(payload).select("id,bot_name,prefix,mode,status,created_at").single();
-    if (error) throw error;
+    if (error) {
+      if (error.code === "23505") throw new Error("This account already has a bot. Each account can deploy one bot.");
+      throw error;
+    }
     bots.unshift(data);
     $("create-form").reset();
     $("bot-prefix").value = ".";
