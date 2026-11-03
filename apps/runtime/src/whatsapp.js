@@ -78,7 +78,7 @@ export class WhatsAppSessionManager {
     if (error) throw new Error("Could not read WhatsApp session status");
     const lastSeenAt = data?.last_seen_at || null;
     const pairingExpiresAt = data?.status === "pairing" && lastSeenAt
-      ? new Date(new Date(lastSeenAt).getTime() + 25 * 60_000).toISOString()
+      ? new Date(new Date(lastSeenAt).getTime() + 25_000).toISOString()
       : null;
     return { status: data?.status || "not_connected", lastSeenAt, pairedAt: data?.paired_at || null, pairingExpiresAt };
   }
@@ -290,7 +290,7 @@ export class WhatsAppSessionManager {
       }
       const code = await record.socket.requestPairingCode(phone.replace(/\D/g, ""));
       record.pairingCode = code;
-      record.pairingExpiresAt = new Date(Date.now() + 25 * 60_000).toISOString();
+      record.pairingExpiresAt = new Date(Date.now() + 25_000).toISOString();
       this.cooldowns.set(bot.id, Date.now() + cooldownSeconds * 1000);
       await this.persistStatus(bot, "pairing", false, "pairing", true);
       record.pairingTimer = setTimeout(async () => {
@@ -303,7 +303,7 @@ export class WhatsAppSessionManager {
         } catch (error) {
           this.logger.error({ err: error, botId: bot.id }, "Could not persist expired pairing state");
         }
-      }, 25 * 60_000);
+      }, 25_000);
       record.pairingTimer.unref?.();
       return { status: "pairing", code, pairingExpiresAt: record.pairingExpiresAt };
     } catch (error) {
