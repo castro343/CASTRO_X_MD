@@ -1,10 +1,9 @@
-const linkPattern = /(?:https?:\/\/|www\.)\S+|chat\.whatsapp\.com\/\S+|\b(?:[a-z0-9-]+\.)+(?:com|net|org|io|app|co|me|info|biz|xyz|site|online|dev|gg)\b/i;
-const deletedCache = new Map();
+const linkPattern = /(?:https?:\\/\\/|www\\.)\\S+|chat\\.whatsapp\\.com\\/\\S+|\\b(?:[a-z0-9-]+\\.)+(?:com|net|org|io|app|co|me|info|biz|xyz|site|online|dev|gg)\\b/i;
 const CACHE_TTL_MS = 5 * 60_000;
 const MAX_CACHE_ITEMS = 500;
 
 function isGroup(jid) { return typeof jid === "string" && jid.endsWith("@g.us"); }
-function normalizeJid(value) { return String(value || "").replace(/:\d+@/, "@"); }
+function normalizeJid(value) { return String(value || "").replace(/:\\d+@/, "@"); }
 function sender(message) { return normalizeJid(message?.key?.participant || message?.key?.remoteJid || ""); }
 function getText(message) {
   const content = message?.message || {};
@@ -16,10 +15,10 @@ function getText(message) {
 function feature(bot, name, fallback = false) {
   return bot?.settings?.features?.[name] ?? fallback;
 }
-function pruneCache() {
+function pruneCache(cache) {
   const now = Date.now();
-  for (const [key, value] of deletedCache) if (now - value.at > CACHE_TTL_MS) deletedCache.delete(key);
-  while (deletedCache.size > MAX_CACHE_ITEMS) deletedCache.delete(deletedCache.keys().next().value);
+  for (const [key, value] of cache) if (now - value.at > CACHE_TTL_MS) cache.delete(key);
+  while (cache.size > MAX_CACHE_ITEMS) cache.delete(cache.keys().next().value);
 }
 async function groupAdminState(socket, jid, actor) {
   const meta = await socket.groupMetadata(jid);
@@ -29,6 +28,9 @@ async function groupAdminState(socket, jid, actor) {
 }
 
 export function attachModerationHandlers({ socket, bot }) {
+  // Keep anti-delete records inside this bot's handler closure. Message IDs can
+  // collide across separate WhatsApp accounts, so a process-wide cache leaks data.
+  const deletedCache = new Map();
   const mode = () => bot.mode === "private" ? "private" : "public";
 
   socket.ev.on("messages.upsert", async ({ messages, type }) => {
@@ -48,9 +50,13 @@ export function attachModerationHandlers({ socket, bot }) {
         continue;
       }
 
+      // Private mode means direct messages only. Enforce this before caching,
+      // moderation, auto-replies, or reactions so group traffic has no side effects.
+      if (mode() === "private" && isGroup(jid)) continue;
+
       const text = getText(message);
       if (text) {
-        pruneCache();
+        pruneCache(deletedCache);
         deletedCache.set(key.id, { at: Date.now(), jid, key, text, participant: key.participant || null });
       }
 
@@ -96,9 +102,6 @@ export function attachModerationHandlers({ socket, bot }) {
           keyword && emoji && text.toLowerCase().includes(keyword.toLowerCase()));
         if (entry) await socket.sendMessage(jid, { react: { text: String(entry[1]).slice(0, 8), key } }).catch(() => {});
       }
-
-      // Private mode is intentionally conservative: commands from group chats are ignored.
-      if (mode() === "private" && isGroup(jid)) continue;
     }
   });
 
@@ -111,7 +114,7 @@ export function attachModerationHandlers({ socket, bot }) {
       if (!original || Date.now() - original.at > CACHE_TTL_MS) continue;
       deletedCache.delete(update.key.id);
       const label = original.participant ? "A group message" : "A message";
-      await socket.sendMessage(original.jid, { text: `🛡️ Anti-delete: ${label} was deleted.\n\n${original.text.slice(0, 3000)}` }).catch(() => {});
+      await socket.sendMessage(original.jid, { text: `🛡️ Anti-delete: ${label} was deleted.\\n\\n${original.text.slice(0, 3000)}` }).catch(() => {});
     }
   });
 
