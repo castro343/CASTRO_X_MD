@@ -243,7 +243,13 @@ $("bot-list").addEventListener("click", async event => {
           <p class="notice" data-pair-message role="status"></p>
         </form>`;
       message("global-message", "Enter the WhatsApp number in the form inside your bot card.");
-    } else if (action === "settings") { await openSettings(card);\n    } else if (action === "save-settings") { await saveSettings(card,button);\n    } else if (action === "close-settings") { card.querySelector("[data-settings-box]").hidden=true;\n    } else if (action === "reconnect") {
+    } else if (action === "settings") {
+      await openSettings(card);
+    } else if (action === "save-settings") {
+      await saveSettings(card, button);
+    } else if (action === "close-settings") {
+      card.querySelector("[data-settings-box]").hidden = true;
+    } else if (action === "reconnect") {
       const result = await reconnectBot(botId, token()); message("global-message", `Reconnect request: ${result.status || "accepted"}`);
       await refreshOne(card);
     } else if (action === "disconnect") {
