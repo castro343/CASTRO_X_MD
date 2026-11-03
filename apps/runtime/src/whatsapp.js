@@ -203,7 +203,7 @@ export class WhatsAppSessionManager {
     if (!sessions?.length) return { restored: 0 };
     const ids = sessions.map(row => row.bot_instance_id);
     const { data: bots, error: botError } = await this.supabase.from("bot_instances")
-      .select("id,owner_id,bot_name,status,prefix,mode")
+      .select("id,owner_id,bot_name,status,prefix,mode,settings")
       .in("id", ids).in("status", ["connected", "disconnected"]);
     if (botError) throw new Error(`Could not load bots for session restoration: ${botError.message}`);
     let restored = 0;
