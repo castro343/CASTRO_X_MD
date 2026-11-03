@@ -72,11 +72,15 @@ export class WhatsAppSessionManager {
   async status(botId) {
     const record = this.sockets.get(botId);
     if (record?.connected) return { status: "connected" };
-    if (record?.pairingCode) return { status: "pairing", pairingCode: record.pairingCode };
+    if (record?.pairingCode) return { status: "pairing", pairingCode: record.pairingCode, pairingExpiresAt: record.pairingExpiresAt };
     const { data, error } = await this.supabase.from("bot_sessions")
       .select("status,last_seen_at,paired_at").eq("bot_instance_id", botId).maybeSingle();
     if (error) throw new Error("Could not read WhatsApp session status");
-    return { status: data?.status || "not_connected", lastSeenAt: data?.last_seen_at || null, pairedAt: data?.paired_at || null };
+    const lastSeenAt = data?.last_seen_at || null;
+    const pairingExpiresAt = data?.status === "pairing" && lastSeenAt
+      ? new Date(new Date(lastSeenAt).getTime() + 25 * 60_000).toISOString()
+      : null;
+    return { status: data?.status || "not_connected", lastSeenAt, pairedAt: data?.paired_at || null, pairingExpiresAt };
   }
 
   async createSocket(bot, { pairing = false } = {}) {
@@ -101,7 +105,7 @@ export class WhatsAppSessionManager {
       generateHighQualityLinkPreview: false,
       markOnlineOnConnect: false
     });
-    const record = { socket, connected: false, pairingCode: null, intentionalClose: false, closed: false, closeError: null, bot, creds: state.creds };
+    const record = { socket, connected: false, pairingCode: null, pairingExpiresAt: null, pairingTimer: null, intentionalClose: false, closed: false, closeError: null, bot, creds: state.creds };
     this.sockets.set(bot.id, record);
     attachCommandHandlers({ socket, bot });
     socket.ev.on("creds.update", () => {
@@ -115,6 +119,9 @@ export class WhatsAppSessionManager {
         if (update.connection === "open") {
           record.connected = true;
           record.pairingCode = null;
+          record.pairingExpiresAt = null;
+          if (record.pairingTimer) clearTimeout(record.pairingTimer);
+          record.pairingTimer = null;
           this.retryCounts.delete(bot.id);
           this.clearReconnect(bot.id);
           await this.persistStatus(bot, "connected", true);
@@ -283,13 +290,27 @@ export class WhatsAppSessionManager {
       }
       const code = await record.socket.requestPairingCode(phone.replace(/\D/g, ""));
       record.pairingCode = code;
+      record.pairingExpiresAt = new Date(Date.now() + 25 * 60_000).toISOString();
       this.cooldowns.set(bot.id, Date.now() + cooldownSeconds * 1000);
       await this.persistStatus(bot, "pairing", false, "pairing", true);
-      return { status: "pairing", code };
+      record.pairingTimer = setTimeout(async () => {
+        if (this.sockets.get(bot.id) !== record || record.connected) return;
+        record.intentionalClose = true;
+        this.sockets.delete(bot.id);
+        try { record.socket.end(undefined); } catch {}
+        try {
+          await this.persistStatus(bot, "not_connected", false, "not_connected", false);
+        } catch (error) {
+          this.logger.error({ err: error, botId: bot.id }, "Could not persist expired pairing state");
+        }
+      }, 25 * 60_000);
+      record.pairingTimer.unref?.();
+      return { status: "pairing", code, pairingExpiresAt: record.pairingExpiresAt };
     } catch (error) {
       this.cooldowns.delete(bot.id);
       const record = this.sockets.get(bot.id);
       if (record) {
+        if (record.pairingTimer) clearTimeout(record.pairingTimer);
         record.intentionalClose = true;
         this.sockets.delete(bot.id);
         try { record.socket.end(error); } catch {}
@@ -329,6 +350,7 @@ export class WhatsAppSessionManager {
     this.retryCounts.delete(bot.id);
     const record = this.sockets.get(bot.id);
     if (record) {
+      if (record.pairingTimer) clearTimeout(record.pairingTimer);
       record.intentionalClose = true;
       this.sockets.delete(bot.id);
       try { record.socket.end(undefined); } catch {}
@@ -354,6 +376,7 @@ export class WhatsAppSessionManager {
 
     const closing = [];
     for (const [botId, record] of this.sockets) {
+      if (record.pairingTimer) clearTimeout(record.pairingTimer);
       record.intentionalClose = true;
       this.sockets.delete(botId);
       try { closing.push(Promise.resolve(record.socket.end(undefined))); } catch {}
