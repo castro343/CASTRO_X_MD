@@ -78,7 +78,7 @@ async function authenticate(req, res, next) {
 
 async function ownedBot(req, res, next) {
   const { data, error } = await supabase.from("bot_instances")
-    .select("id,owner_id,bot_name,status,prefix,mode")
+    .select("id,owner_id,bot_name,status,prefix,mode,settings")
     .eq("id", req.params.botId).eq("owner_id", req.user.id).maybeSingle();
   if (error) return res.status(503).json({ error: "Could not verify bot ownership" });
   if (!data) return res.status(404).json({ error: "Bot not found" });
@@ -112,6 +112,43 @@ app.post("/api/bots/:botId/pair", authenticate, pairLimiter, ownedBot, async (re
     res.status(400).json({ error: userMessage });
   }
 });
+const featureNames = ["antilink","antidelete","antiviewonce","antibadwords","autoreply","customreactions","statusview","statusreactions","typing","recording","welcome","goodbye"];
+function sanitizeSettings(input) {
+  const source = input && typeof input === "object" ? input : {};
+  const features = {};
+  for (const name of featureNames) if (typeof source.features?.[name] === "boolean") features[name] = source.features[name];
+  const badWords = Array.isArray(source.badWords) ? source.badWords.slice(0, 50).map(x => String(x).trim().slice(0, 40)).filter(Boolean) : [];
+  const autoReplies = Array.isArray(source.autoReplies) ? source.autoReplies.slice(0, 30).map(item => ({
+    keyword: String(item?.keyword || "").trim().slice(0, 60),
+    response: String(item?.response || "").trim().slice(0, 500),
+    enabled: item?.enabled !== false
+  })).filter(item => item.keyword && item.response) : [];
+  const reactions = {};
+  if (source.reactions && typeof source.reactions === "object" && !Array.isArray(source.reactions)) {
+    for (const [key, value] of Object.entries(source.reactions).slice(0, 30)) {
+      const keyword = String(key).trim().slice(0, 40), emoji = String(value || "").trim().slice(0, 8);
+      if (keyword && emoji) reactions[keyword] = emoji;
+    }
+  }
+  return { ...(source.features ? {} : {}), features, badWords, autoReplies, reactions,
+    badWordAction: source.badWordAction === "warn" ? "warn" : "delete",
+    statusReaction: String(source.statusReaction || "❤️").slice(0, 8) };
+}
+app.get("/api/bots/:botId/settings", authenticate, ownedBot, (req, res) => {
+  res.json({ settings: req.bot.settings || {} });
+});
+app.put("/api/bots/:botId/settings", authenticate, ownedBot, async (req, res) => {
+  const parsed = z.object({ settings: z.record(z.string(), z.unknown()) }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Invalid feature settings." });
+  const settings = sanitizeSettings(parsed.data.settings);
+  const { error } = await supabase.from("bot_instances").update({ settings })
+    .eq("id", req.bot.id).eq("owner_id", req.user.id);
+  if (error) return res.status(503).json({ error: "Could not save feature settings." });
+  const active = sessions.sockets.get(req.bot.id);
+  if (active) active.bot.settings = settings;
+  res.json({ ok: true, settings });
+});
+
 app.post("/api/bots/:botId/reconnect", authenticate, ownedBot, async (req, res) => {
   try {
     res.json(await sessions.reconnect(req.bot));
