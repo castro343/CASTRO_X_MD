@@ -1,0 +1,10 @@
+node_modules
+.git
+.env
+.env.*
+config.env
+sessions
+auth_info_baileys
+session
+*.log
+.DS_Store
