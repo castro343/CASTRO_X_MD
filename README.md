@@ -1,89 +1,36 @@
-<h1 align="center">
-  <img src="https://imgz.co/images/2026/11/03/703766.jpg" alt="CASTRO-MD" width="800" style="border-radius:25px;box-shadow:0 0 40px #C8860A;"/>
-</h1>
+# CASTRO X MD
 
-<a><img src='https://i.imgur.com/LyHic3i.gif'/></a>
+CASTRO X MD is a Node.js WhatsApp bot project. The bot runtime currently starts from the repository-root `index.js`.
 
-<!-- BADGES -->
-<p align="center">
-  <a href="https://github.com/Castro-tech/CASTRO-MD/stargazers/"><img title="Stars" src="https://img.shields.io/github/stars/Castro-tech/CASTRO-MD?color=F5A623&style=flat-square&logo=github&cacheSeconds=3600"/></a>
-  <a href="https://github.com/Castro-tech/CASTRO-MD/network/members"><img title="Forks" src="https://img.shields.io/github/forks/Castro-tech/CASTRO-MD?color=C8860A&style=flat-square&logo=github&cacheSeconds=3600"/></a>
-  <a href="https://github.com/Castro-tech/CASTRO-MD/"><img title="Size" src="https://img.shields.io/github/repo-size/Castro-tech/CASTRO-MD?style=flat-square&color=8B4513&cacheSeconds=3600"/></a>
-  <a href="https://github.com/Castro-tech/CASTRO-MD/graphs/commit-activity"><img height="20" src="https://img.shields.io/badge/Maintained%3F-yes-F5A623.svg"/></a>
-</p>
+## Requirements
 
-<a><img src='https://i.imgur.com/LyHic3i.gif'/></a>
+- Node.js 24 or newer
+- npm 10 or newer
+- A persistent server/container for the WhatsApp process
+- A WhatsApp account that you control
 
-<!-- DEVELOPER NAME -->
-<p align="center">
-  <a href="https://github.com/Castro-tech" target="_blank">
-    <img src="https://img.shields.io/badge/👨‍💻_DEVELOPER-CASTRO_TECH-F5A623?style=for-the-badge&logoColor=black&labelColor=1a1100"/>
-  </a>
-</p>
+## Local setup
 
-<a><img src='https://i.imgur.com/LyHic3i.gif'/></a>
+1. Clone this repository.
+2. Install dependencies with `npm install`.
+3. Copy `.env.example` to `.env` or configure the variables in your hosting provider.
+4. Set your own `OWNER_NUMBER` and other required settings. Use international format without a leading plus sign.
+5. Start the bot with `npm start`.
 
-<!-- VIEWS COUNTER -->
-<p align="center">
-  <img src="https://komarev.com/ghpvc/?username=CASTRO-MD&label=TOTAL+VIEWS&style=for-the-badge&color=F5A623&labelColor=1a1100"/>
-</p>
+Do not commit `.env`, `config.env`, WhatsApp credentials, session folders, or API keys.
 
-<a><img src='https://i.imgur.com/LyHic3i.gif'/></a>
+## Configuration
 
-<!-- CHANNEL UPDATE -->
-<p align="center">
-  <a href="https://whatsapp.com/channel/0029VbBmz4V5vKAIaWfYPT0C" target="_blank">
-    <img src="https://img.shields.io/badge/🔔_BOT_UPDATES-JOIN_CHANNEL_NOW-F5A623?style=for-the-badge&logo=whatsapp&logoColor=black&labelColor=1a1100"/>
-  </a>
-</p>
+The sample environment file contains the supported configuration names and safe defaults. Set owner-specific values yourself; this repository intentionally does not ship with another person's WhatsApp number as the default owner.
 
-<a><img src='https://i.imgur.com/LyHic3i.gif'/></a>
+## Deployment notes
 
----
+The Dockerfile uses Node.js 24 and copies the repository-root runtime files, matching the current `index.js` entry point and `npm start` script.
 
-## 🔐 GET PAIR CODE
+**Important:** WhatsApp authentication data must be stored on persistent storage supplied by the hosting platform. A normal ephemeral container filesystem can lose sessions during redeployments or restarts. Confirm the bot's actual authentication storage path and mount a persistent disk there before treating a deployment as production-ready.
 
-<p align="center">
-  <a href="https://adeel-md-pair-1-50618ddd4ae2.herokuapp.com/" target="_blank">
-    <img src="https://img.shields.io/badge/🔑_GET_PAIR_CODE-CLICK_HERE-F5A623?style=for-the-badge&logoColor=black&labelColor=1a1100" width="300"/>
-  </a>
-</p>
+Vercel is suitable for the web dashboard, not for running the always-on WhatsApp socket process. Run the bot process on a persistent Node.js host or VPS.
 
-<p align="center"><b>Enter your number with country code — Example: <code>923001234567</code></b></p>
+## Project status
 
-<a><img src='https://i.imgur.com/LyHic3i.gif'/></a>
-
----
-
-## 🚀 DEPLOYMENT
-
-<div align="center">
-  <table>
-    <tr>
-      <td align="center" style="padding:15px;">
-        <a href="https://dashboard.heroku.com/new?template=https://github.com/Castro-tech/CASTRO-MD" target="_blank">
-          <img src="https://img.shields.io/badge/HEROKU-DEPLOY NOW-F5A623?style=for-the-badge&logo=heroku&logoColor=black&labelColor=1a1100" width="220" height="55"/>
-        </a>
-      </td>
-      <td align="center" style="padding:15px;">
-        <a href="https://adeel-md-vps.vercel.app/" target="_blank">
-          <img src="https://img.shields.io/badge/VPS-DEPLOY NOW-C8860A?style=for-the-badge&logo=virtualbox&logoColor=black&labelColor=1a1100" width="220" height="55"/>
-        </a>
-      </td>
-    </tr>
-  </table>
-</div>
-
-<a><img src='https://i.imgur.com/LyHic3i.gif'/></a>
-
----
-
-## ⭐ FORK & STAR
-
-<p align="center">
-  <a href="https://github.com/Castro-tech/CASTRO-MD/fork" target="_blank">
-    <img src="https://img.shields.io/badge/FORK-CASTRO%20MD-BOT?color=F5A623&style=for-the-badge&logo=stackshare&labelColor=1a1100"/>
-  </a>
-  &nbsp;&nbsp;
-  <a href="https://github.com/Castro-tech/CASTRO-MD" target="_blank">
-    <img src="htt
+Pairing, reconnect behavior, multi-user session isolation, dashboard-to-runtime integration, and production uptime still require end-to-end verification against a real WhatsApp account. A successful build alone does not prove that WhatsApp pairing or session persistence works.
