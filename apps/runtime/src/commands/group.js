@@ -196,4 +196,36 @@ export const groupCommands = [
     }
   },
 
+
+  {
+    name: "welcome", category: "Group",
+    description: "Toggle automatic welcome messages for new members (admin only).",
+    execute: async ({ socket, message, args }) => {
+      const jid = requireGroup(message);
+      await requireAdmin(socket, jid, message);
+      const choice = String(args[0] || "").toLowerCase();
+      if (!["on", "off", "status"].includes(choice)) throw new Error("Usage: welcome on | off | status");
+      const settings = groupFeatureSettings.get(jid) || {};
+      if (choice === "status") return { text: `👋 Welcome messages are ${settings.welcome ? "ON" : "OFF"}.` };
+      settings.welcome = choice === "on";
+      groupFeatureSettings.set(jid, settings);
+      return { text: settings.welcome ? "👋 Welcome messages enabled." : "Welcome messages disabled." };
+    }
+  },
+  {
+    name: "goodbye", category: "Group",
+    description: "Toggle automatic goodbye messages when members leave (admin only).",
+    execute: async ({ socket, message, args }) => {
+      const jid = requireGroup(message);
+      await requireAdmin(socket, jid, message);
+      const choice = String(args[0] || "").toLowerCase();
+      if (!["on", "off", "status"].includes(choice)) throw new Error("Usage: goodbye on | off | status");
+      const settings = groupFeatureSettings.get(jid) || {};
+      if (choice === "status") return { text: `👋 Goodbye messages are ${settings.goodbye ? "ON" : "OFF"}.` };
+      settings.goodbye = choice === "on";
+      groupFeatureSettings.set(jid, settings);
+      return { text: settings.goodbye ? "👋 Goodbye messages enabled." : "Goodbye messages disabled." };
+    }
+  },
+
 ];
