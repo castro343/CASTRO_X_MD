@@ -17,7 +17,7 @@ test("parses command names and arguments separated by spaces or newlines", () =>
   assert.deepEqual(parseCommand("!ping   hello world", "!"), {
     name: "ping", args: ["hello", "world"]
   });
-  assert.deepEqual(parseCommand(".menu\\nextra", "."), {
+  assert.deepEqual(parseCommand(".menu\nextra", "."), {
     name: "menu", args: ["extra"]
   });
   assert.equal(parseCommand("ping", "."), null);
