@@ -146,3 +146,48 @@ test("botinfo reports the selected bot configuration safely", async () => {
   assert.match(sent[0][1].text, /Mode: public/);
 });
 
+test("groupinfo returns group metadata and rejects private chats", async () => {
+  let handler;
+  const sent = [];
+  const socket = {
+    ev: { on: (event, callback) => { if (event === "messages.upsert") handler = callback; } },
+    groupMetadata: async () => ({
+      subject: "Build Team",
+      creation: 1700000000,
+      participants: [{ id: "1@s.whatsapp.net" }, { id: "2@s.whatsapp.net", admin: "admin" }]
+    }),
+    sendMessage: async (...args) => { sent.push(args); }
+  };
+  attachCommandHandlers({ socket, bot: { prefix: "." } });
+  await handler({ type: "notify", messages: [
+    { key: { remoteJid: "254700000001@s.whatsapp.net" }, message: { conversation: ".groupinfo" } },
+    { key: { remoteJid: "12345-678@g.us" }, message: { conversation: ".ginfo" } }
+  ] });
+  assert.match(sent[0][1].text, /only be used inside a WhatsApp group/);
+  assert.match(sent[1][1].text, /Build Team/);
+  assert.match(sent[1][1].text, /Members: 2/);
+  assert.match(sent[1][1].text, /Admins: 1/);
+});
+
+test("admins lists only group administrators", async () => {
+  let handler;
+  const sent = [];
+  const socket = {
+    ev: { on: (event, callback) => { if (event === "messages.upsert") handler = callback; } },
+    groupMetadata: async () => ({
+      subject: "Build Team",
+      participants: [
+        { id: "111@s.whatsapp.net", notify: "Alice", admin: "admin" },
+        { id: "222@s.whatsapp.net", notify: "Bob" }
+      ]
+    }),
+    sendMessage: async (...args) => { sent.push(args); }
+  };
+  attachCommandHandlers({ socket, bot: { prefix: "." } });
+  await handler({ type: "notify", messages: [
+    { key: { remoteJid: "12345-678@g.us" }, message: { conversation: ".admins" } }
+  ] });
+  assert.match(sent[0][1].text, /Alice/);
+  assert.doesNotMatch(sent[0][1].text, /Bob/);
+});
+
