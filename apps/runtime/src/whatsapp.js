@@ -101,7 +101,7 @@ export class WhatsAppSessionManager {
       generateHighQualityLinkPreview: false,
       markOnlineOnConnect: false
     });
-    const record = { socket, connected: false, pairingCode: null, intentionalClose: false, bot, creds: state.creds };
+    const record = { socket, connected: false, pairingCode: null, intentionalClose: false, closed: false, closeError: null, bot, creds: state.creds };
     this.sockets.set(bot.id, record);
     attachCommandHandlers({ socket, bot });
     socket.ev.on("creds.update", () => {
@@ -122,6 +122,8 @@ export class WhatsAppSessionManager {
         }
         if (update.connection === "close") {
           record.connected = false;
+          record.closed = true;
+          record.closeError = update.lastDisconnect?.error || new Error("WhatsApp websocket closed");
           if (this.sockets.get(bot.id) === record) this.sockets.delete(bot.id);
           if (record.intentionalClose || this.stopping) return;
           const code = update.lastDisconnect?.error?.output?.statusCode;
@@ -209,6 +211,48 @@ export class WhatsAppSessionManager {
     return { restored };
   }
 
+  async waitForPairingSocketReady(record, timeoutMs = 15_000) {
+    const ws = record.socket?.ws;
+    if (!ws) throw new Error("WhatsApp websocket is unavailable; pairing cannot safely continue");
+    if (record.closed || ws.readyState === 3) {
+      throw new Error("WhatsApp websocket closed before it became ready");
+    }
+    if (ws.readyState === 1) return;
+
+    await new Promise((resolve, reject) => {
+      let settled = false;
+      const finish = (error) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        ws.removeListener?.("open", onOpen);
+        ws.removeListener?.("error", onError);
+        ws.removeListener?.("close", onClose);
+        record.socket.ev.removeListener?.("connection.update", onConnectionUpdate);
+        if (error) reject(error);
+        else resolve();
+      };
+      const onOpen = () => finish();
+      const onError = error => finish(new Error(`WhatsApp websocket failed to open: ${error?.message || "unknown error"}`));
+      const onClose = () => finish(new Error("WhatsApp websocket closed before it became ready"));
+      const onConnectionUpdate = update => {
+        if (update.connection === "close") {
+          const code = update.lastDisconnect?.error?.output?.statusCode;
+          finish(new Error(code ? `WhatsApp closed during pairing startup (code ${code})` : "WhatsApp closed during pairing startup"));
+        }
+      };
+      const timer = setTimeout(() => finish(new Error("Timed out waiting for WhatsApp websocket readiness")), timeoutMs);
+      timer.unref?.();
+      ws.once?.("open", onOpen);
+      ws.once?.("error", onError);
+      ws.once?.("close", onClose);
+      record.socket.ev.on("connection.update", onConnectionUpdate);
+      // Re-check after listeners are installed to avoid missing a fast open event.
+      if (ws.readyState === 1) finish();
+      else if (record.closed || ws.readyState === 3) onClose();
+    });
+  }
+
   async requestPairingCode(bot, phone) {
     if (this.stopping) throw new Error("Runtime is shutting down");
     if (this.sockets.has(bot.id) || this.pending.has(bot.id)) {
@@ -229,10 +273,14 @@ export class WhatsAppSessionManager {
       if (state.creds.registered) throw new Error("This bot already has a paired WhatsApp session. Use reconnect or disconnect instead of requesting another code.");
       const record = await this.createSocket(bot, { pairing: true });
       if (!record) throw new Error("Could not initialize WhatsApp pairing");
-      const configuredDelay = Number(process.env.PAIRING_START_DELAY_MS || 5000);
-      const delayMs = Number.isFinite(configuredDelay) ? Math.min(15000, Math.max(2000, configuredDelay)) : 5000;
-      await new Promise(resolve => setTimeout(resolve, delayMs));
-      if (this.sockets.get(bot.id) !== record) throw new Error("WhatsApp connection closed during startup");
+      const configuredTimeout = Number(process.env.PAIRING_SOCKET_READY_TIMEOUT_MS || 15000);
+      const timeoutMs = Number.isFinite(configuredTimeout)
+        ? Math.min(30000, Math.max(5000, configuredTimeout))
+        : 15000;
+      await this.waitForPairingSocketReady(record, timeoutMs);
+      if (this.sockets.get(bot.id) !== record || record.closed) {
+        throw new Error("WhatsApp connection closed during startup");
+      }
       const code = await record.socket.requestPairingCode(phone.replace(/\D/g, ""));
       record.pairingCode = code;
       this.cooldowns.set(bot.id, Date.now() + cooldownSeconds * 1000);
