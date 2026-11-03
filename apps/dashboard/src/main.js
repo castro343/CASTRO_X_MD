@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { getBotRuntimeStatus, requestBotPairingCode, reconnectBot, disconnectBot, isRuntimeConfigured } from "./runtime-client.js";
+import { getBotRuntimeStatus, requestBotPairingCode, reconnectBot, disconnectBot, getBotSettings, saveBotSettings, isRuntimeConfigured } from "./runtime-client.js";
 import "./style.css";
 
 const config = window.CASTRO_X_MD_CONFIG || {};
@@ -38,9 +38,9 @@ async function loadBots() {
         <button class="outline" data-action="status">Refresh status</button>
         <button class="primary" data-action="pair">Pair WhatsApp</button>
         <button class="outline" data-action="reconnect">Reconnect</button>
-        <button class="outline" data-action="disconnect">Disconnect</button>
+        <button class="outline" data-action="disconnect">Disconnect</button><button class="outline" data-action="settings">⚙ Settings</button>
       </div>
-      <div class="pair-box" data-pair-box hidden></div>
+      <div class="pair-box" data-pair-box hidden></div><div class="settings-box" data-settings-box hidden></div>
     </article>`).join("") : '<div class="panel bot-card"><h3>No bots yet</h3><p class="muted">Create your first bot instance to get started.</p></div>';
 }
 
@@ -58,6 +58,27 @@ async function refreshOne(card) {
   return result;
 }
 
+
+const featureLabels={antilink:"Anti-link",antidelete:"Anti-delete",antiviewonce:"Anti-view-once",antibadwords:"Anti-bad words",autoreply:"Auto-reply",customreactions:"Custom reactions",statusview:"Auto-view statuses",statusreactions:"Status reactions",typing:"Typing indicator",recording:"Recording indicator",welcome:"Welcome messages",goodbye:"Goodbye messages"};
+const defaultSettings={features:{antilink:true,antidelete:false,antiviewonce:false,antibadwords:false,autoreply:false,customreactions:false,statusview:false,statusreactions:false,typing:false,recording:false,welcome:false,goodbye:false},badWords:[],autoReplies:[],reactions:{},badWordAction:"delete",statusReaction:"❤️"};
+function settingsMarkup(settings,mode){
+ const s={...defaultSettings,...settings,features:{...defaultSettings.features,...(settings.features||{})}};
+ const toggles=Object.entries(featureLabels).map(([k,v])=>`<label class="setting-toggle"><span>${v}</span><input type="checkbox" data-feature="${k}" ${s.features[k]?"checked":""}></label>`).join("");
+ return `<div class="settings-heading"><div><div class="eyebrow">BOT CONFIGURATION</div><h3>Automation settings</h3></div></div>
+ <label>Visibility<select data-mode><option value="private" ${mode==="private"?"selected":""}>Private — owner commands only</option><option value="public" ${mode==="public"?"selected":""}>Public — everyone can use commands</option></select></label>
+ <div class="settings-toggles">${toggles}</div>
+ <label>Blocked words <small>Separate with commas</small><textarea data-badwords rows="2">${escapeHtml((s.badWords||[]).join(", "))}</textarea></label>
+ <label>Bad-word action<select data-badword-action><option value="delete" ${s.badWordAction==="delete"?"selected":""}>Delete message</option><option value="warn" ${s.badWordAction==="warn"?"selected":""}>Delete and warn</option></select></label>
+ <label>Auto-replies <small>One per line: keyword = reply</small><textarea data-autoreplies rows="4">${escapeHtml((s.autoReplies||[]).map(x=>x.keyword+" = "+x.response).join("\\n"))}</textarea></label>
+ <label>Custom reactions <small>One per line: keyword = emoji</small><textarea data-reactions rows="3">${escapeHtml(Object.entries(s.reactions||{}).map(([k,v])=>k+" = "+v).join("\\n"))}</textarea></label>
+ <label>Status reaction emoji<input data-status-reaction maxlength="8" value="${escapeHtml(s.statusReaction||"❤️")}"></label>
+ <div class="actions"><button class="primary" type="button" data-action="save-settings">Save settings</button><button class="outline" type="button" data-action="close-settings">Close</button></div><p class="notice" data-settings-message role="status"></p>`;
+}
+function parsePairs(value){return String(value||"").split("\\n").map(line=>line.split("=")).filter(p=>p.length>=2).map(p=>[p.shift().trim(),p.join("=").trim()]).filter(([k,v])=>k&&v);}
+async function openSettings(card){const box=card.querySelector("[data-settings-box]"),bot=bots.find(x=>x.id===card.dataset.bot);box.hidden=false;box.innerHTML='<p class="muted">Loading settings…</p>';try{const r=await getBotSettings(card.dataset.bot,token());box.innerHTML=settingsMarkup(r.settings||defaultSettings,bot?.mode||"private");}catch(e){box.innerHTML=`<p class="notice">${escapeHtml(e.message||"Could not load settings.")}</p>`;}}
+async function saveSettings(card,button){const box=card.querySelector("[data-settings-box]"),q=s=>box.querySelector(s),features={};box.querySelectorAll("[data-feature]").forEach(x=>features[x.dataset.feature]=x.checked);
+ const settings={features,badWords:q("[data-badwords]").value.split(",").map(x=>x.trim()).filter(Boolean),badWordAction:q("[data-badword-action]").value,autoReplies:parsePairs(q("[data-autoreplies]").value).map(([keyword,response])=>({keyword,response,enabled:true})),reactions:Object.fromEntries(parsePairs(q("[data-reactions]").value)),statusReaction:q("[data-status-reaction]").value.trim()||"❤️"};
+ const mode=q("[data-mode]").value,notice=q("[data-settings-message]");button.disabled=true;notice.textContent="Saving…";try{await saveBotSettings(card.dataset.bot,settings,mode,token());const bot=bots.find(x=>x.id===card.dataset.bot);if(bot)bot.mode=mode;notice.textContent="✓ Settings saved and applied to the active runtime.";}catch(e){notice.textContent=e.message||"Could not save settings.";}finally{button.disabled=false;}}
 function clearPairingTimer(botId) {
   const timer = pairingTimers.get(botId);
   if (timer) clearInterval(timer);
@@ -222,7 +243,7 @@ $("bot-list").addEventListener("click", async event => {
           <p class="notice" data-pair-message role="status"></p>
         </form>`;
       message("global-message", "Enter the WhatsApp number in the form inside your bot card.");
-    } else if (action === "reconnect") {
+    } else if (action === "settings") { await openSettings(card);\n    } else if (action === "save-settings") { await saveSettings(card,button);\n    } else if (action === "close-settings") { card.querySelector("[data-settings-box]").hidden=true;\n    } else if (action === "reconnect") {
       const result = await reconnectBot(botId, token()); message("global-message", `Reconnect request: ${result.status || "accepted"}`);
       await refreshOne(card);
     } else if (action === "disconnect") {
