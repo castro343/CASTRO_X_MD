@@ -1,9 +1,9 @@
-const linkPattern = /(?:https?:\\/\\/|www\\.)\\S+|chat\\.whatsapp\\.com\\/\\S+|\\b(?:[a-z0-9-]+\\.)+(?:com|net|org|io|app|co|me|info|biz|xyz|site|online|dev|gg)\\b/i;
+const linkPattern = /(?:https?:\/\/|www\.)\S+|chat\.whatsapp\.com\/\S+|\b(?:[a-z0-9-]+\.)+(?:com|net|org|io|app|co|me|info|biz|xyz|site|online|dev|gg)\b/i;
 const CACHE_TTL_MS = 5 * 60_000;
 const MAX_CACHE_ITEMS = 500;
 
 function isGroup(jid) { return typeof jid === "string" && jid.endsWith("@g.us"); }
-function normalizeJid(value) { return String(value || "").replace(/:\\d+@/, "@"); }
+function normalizeJid(value) { return String(value || "").replace(/:\d+@/, "@"); }
 function sender(message) { return normalizeJid(message?.key?.participant || message?.key?.remoteJid || ""); }
 function getText(message) {
   const content = message?.message || {};
@@ -115,7 +115,7 @@ export function attachModerationHandlers({ socket, bot }) {
       if (mode() === "private" && isGroup(original.jid)) continue;
       deletedCache.delete(update.key.id);
       const label = original.participant ? "A group message" : "A message";
-      await socket.sendMessage(original.jid, { text: `🛡️ Anti-delete: ${label} was deleted.\\n\\n${original.text.slice(0, 3000)}` }).catch(() => {});
+      await socket.sendMessage(original.jid, { text: `🛡️ Anti-delete: ${label} was deleted.\n\n${original.text.slice(0, 3000)}` }).catch(() => {});
     }
   });
 
