@@ -96,10 +96,8 @@ app.post("/api/bots/:botId/pair", authenticate, pairLimiter, ownedBot, async (re
   if (!parsed.success) return res.status(400).json({ error: "Enter a valid WhatsApp phone number." });
   let digits = parsed.data.phone.replace(/\D/g, "");
   if (digits.startsWith("00")) digits = digits.slice(2);
-  if (/^0[17]\d{8}$/.test(digits)) digits = "254" + digits.slice(1);
-  else if (/^[17]\d{8}$/.test(digits)) digits = "254" + digits;
   if (!/^[1-9]\d{7,14}$/.test(digits)) {
-    return res.status(400).json({ error: "Enter a valid number with country code, e.g. +2547XXXXXXXX, 2547XXXXXXXX or 07XXXXXXXX." });
+    return res.status(400).json({ error: "Enter an international WhatsApp number with country code, e.g. 254758102401 or 447700900123." });
   }
   try {
     res.json(await sessions.requestPairingCode(req.bot, digits));
