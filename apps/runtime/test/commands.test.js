@@ -118,3 +118,31 @@ test("rejects duplicate command names and aliases", () => {
     { name: "repeat", execute: () => ({ text: "two" }) }
   ]]), /Duplicate command name|Duplicate command alias/);
 });
+
+test("about describes the CASTRO X MD platform", async () => {
+  const app = harness(".");
+  await app.dispatch({ type: "notify", messages: [
+    { key: { remoteJid: "254700000001@s.whatsapp.net" }, message: { conversation: ".about" } }
+  ] });
+  assert.match(app.sent[0][1].text, /multi-user WhatsApp bot platform/);
+});
+
+test("botinfo reports the selected bot configuration safely", async () => {
+  let handler;
+  const sent = [];
+  const socket = {
+    ev: { on: (event, callback) => { if (event === "messages.upsert") handler = callback; } },
+    sendMessage: async (...args) => { sent.push(args); }
+  };
+  attachCommandHandlers({
+    socket,
+    bot: { prefix: "!", bot_name: "CASTRO TEST", mode: "public" }
+  });
+  await handler({ type: "notify", messages: [
+    { key: { remoteJid: "254700000001@s.whatsapp.net" }, message: { conversation: "!botinfo" } }
+  ] });
+  assert.match(sent[0][1].text, /CASTRO TEST/);
+  assert.match(sent[0][1].text, /Prefix: !/);
+  assert.match(sent[0][1].text, /Mode: public/);
+});
+
