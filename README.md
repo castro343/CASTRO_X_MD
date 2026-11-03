@@ -1,5 +1,5 @@
 <h1 align="center">
-  <img src="https://ibb.co/Ldr9ghZX" alt="CASTRO-MD" width="800" style="border-radius:25px;box-shadow:0 0 40px #C8860A;"/>
+  <img src="https://imgz.co/images/2026/11/03/703766.jpg" alt="CASTRO-MD" width="800" style="border-radius:25px;box-shadow:0 0 40px #C8860A;"/>
 </h1>
 
 <a><img src='https://i.imgur.com/LyHic3i.gif'/></a>
