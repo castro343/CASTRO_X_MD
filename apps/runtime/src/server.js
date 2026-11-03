@@ -108,8 +108,8 @@ app.post("/api/bots/:botId/pair", authenticate, pairLimiter, ownedBot, async (re
     console.warn("WhatsApp pairing request failed:", detail || "Unknown error");
     const userMessage = /already.*paired|already.*running|wait \d+ seconds/i.test(detail)
       ? detail
-      : /connection closed/i.test(detail)
-        ? "WhatsApp closed the connection before the pairing code was ready. Wait a moment and try again."
+      : /connection closed|websocket closed|closed during pairing startup|timed out waiting for whatsapp websocket/i.test(detail)
+        ? "WhatsApp did not keep the pairing connection open long enough. Wait 30 seconds, then request a new code. If it keeps happening, try again later."
         : "Pairing could not start. Check the bot session and try again.";
     res.status(400).json({ error: userMessage });
   }
