@@ -70,7 +70,7 @@ export const coreCommands = [
     category: "Utilities",
     description: "Show the current chat and sender IDs.",
     execute: ({ message }) => ({
-      text: \`🆔 Chat ID: \${message?.key?.remoteJid || "Unknown"}\nSender ID: \${message?.key?.participant || message?.key?.remoteJid || "Unknown"}\`
+      text: `🆔 Chat ID: ${message?.key?.remoteJid || "Unknown"}\nSender ID: ${message?.key?.participant || message?.key?.remoteJid || "Unknown"}`
     })
   },
   {
