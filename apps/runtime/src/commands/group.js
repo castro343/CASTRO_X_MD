@@ -81,7 +81,7 @@ export const groupCommands = [
       const metadata = await socket.groupMetadata(jid);
       const admins = participants(metadata).filter(item => item.admin);
       return { text: admins.length
-        ? [`👑 *GROUP ADMINS — ${clean(metadata.subject)}*`, ...admins.map((item, i) => `${i + 1}. @${String(item.id).split("@")[0].split(":")[0]}`)].join("\n")
+        ? [`👑 *GROUP ADMINS — ${clean(metadata.subject)}*`, ...admins.map((item, i) => `${i + 1}. ${clean(item.notify || item.name || item.id)}`)].join("\n")
         : "No group administrators were returned by WhatsApp.",
         mentions: admins.map(item => item.id) };
     }
