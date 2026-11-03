@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { attachCommandHandlers } from "../src/commands.js";
+import { attachCommandHandlers, parseCommand } from "../src/commands.js";
 
 function harness(prefix = ".") {
   let handler;
@@ -13,6 +13,17 @@ function harness(prefix = ".") {
   return { dispatch: payload => handler(payload), sent };
 }
 
+test("parses command names and arguments separated by spaces or newlines", () => {
+  assert.deepEqual(parseCommand("!ping   hello world", "!"), {
+    name: "ping", args: ["hello", "world"]
+  });
+  assert.deepEqual(parseCommand(".menu\\nextra", "."), {
+    name: "menu", args: ["extra"]
+  });
+  assert.equal(parseCommand("ping", "."), null);
+  assert.equal(parseCommand(".", "."), null);
+});
+
 test("responds to alive and ping using the configured prefix", async () => {
   const app = harness("!");
   await app.dispatch({ type: "notify", messages: [
@@ -21,7 +32,7 @@ test("responds to alive and ping using the configured prefix", async () => {
   ] });
   assert.equal(app.sent.length, 2);
   assert.match(app.sent[0][1].text, /is online/);
-  assert.match(app.sent[1][1].text, /connection is active/);
+  assert.match(app.sent[1][1].text, /PONG/);
 });
 
 test("menu documents the configured prefix and supported commands", async () => {
@@ -31,6 +42,15 @@ test("menu documents the configured prefix and supported commands", async () => 
   ] });
   assert.match(app.sent[0][1].text, /Prefix: #/);
   assert.match(app.sent[0][1].text, /#runtime/);
+  assert.match(app.sent[0][1].text, /\\n/);
+});
+
+test("help is an alias for menu", async () => {
+  const app = harness(".");
+  await app.dispatch({ type: "notify", messages: [
+    { key: { remoteJid: "254700000001@s.whatsapp.net" }, message: { conversation: ".help" } }
+  ] });
+  assert.match(app.sent[0][1].text, /CASTRO X MD/);
 });
 
 test("runtime command reports formatted uptime", async () => {
