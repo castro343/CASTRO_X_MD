@@ -56,6 +56,7 @@ app.use((req, res, next) => {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Vary", "Origin");
     res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type");
+    // Settings are saved with PUT, so browsers must be allowed to preflight that method.
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS");
   }
   if (req.method === "OPTIONS") return res.sendStatus(204);
