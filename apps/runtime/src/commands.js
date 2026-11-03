@@ -2,7 +2,7 @@ import { coreCommands } from "./commands/core.js";
 import { groupCommands, groupFeatureSettings } from "./commands/group.js";
 import { createCommandRegistry } from "./command-registry.js";
 
-const registry = createCommandRegistry([coreCommands, groupCommands]);
+const registry = createCommandRegistry([coreCommands, groupCommands, moderationCommands]);
 
 function extractText(message) {
   return message?.message?.conversation
@@ -27,7 +27,7 @@ export function attachCommandHandlers({ socket, bot, getUptime = () => process.u
     ? bot.prefix
     : ".";
   const commands = commandModules.length
-    ? createCommandRegistry([coreCommands, groupCommands, ...commandModules])
+    ? createCommandRegistry([coreCommands, groupCommands, moderationCommands, ...commandModules])
     : registry;
 
   socket.ev.on("group-participants.update", async update => {
