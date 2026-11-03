@@ -14,10 +14,8 @@ let signupMode = false;
 function normalizeWhatsAppPhone(value) {
   let digits = String(value || "").split("").filter(ch => ch >= "0" && ch <= "9").join("");
   if (digits.startsWith("00")) digits = digits.slice(2);
-  if (digits.length === 10 && (digits.startsWith("07") || digits.startsWith("01"))) digits = "254" + digits.slice(1);
-  else if (digits.length === 9 && (digits.startsWith("7") || digits.startsWith("1"))) digits = "254" + digits;
-  if (digits.length < 8 || digits.length > 15 || digits.startsWith("0")) throw new Error("Enter a valid number, e.g. +2547XXXXXXXX, 2547XXXXXXXX or 07XXXXXXXX.");
-  return "+" + digits;
+  if (!/^[1-9][0-9]{7,14}$/.test(digits)) throw new Error("Enter an international number with country code, e.g. 254758102401 or 447700900123.");
+  return digits;
 }
 function message(id, text = "") { $(id).textContent = text; }
 function escapeHtml(value = "") { return String(value).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
