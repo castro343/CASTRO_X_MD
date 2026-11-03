@@ -95,7 +95,12 @@ export class WhatsAppSessionManager {
       this.logger.warn({ botId: bot.id }, "Skipping session without registered WhatsApp credentials");
       return null;
     }
-    const { version } = await this.versionFetcher();
+    const versionInfo = await this.versionFetcher();
+    if (pairing && versionInfo.isLatest === false) {
+      this.logger.error({ err: versionInfo.error }, "Could not verify the current WhatsApp Web version for pairing");
+      throw new Error("WhatsApp pairing is temporarily unavailable because the current WhatsApp Web version could not be verified. Please try again later.");
+    }
+    const { version } = versionInfo;
     if (this.stopping || generation !== this.lifecycleGeneration) throw new Error("Runtime is shutting down");
     const socket = this.socketFactory({
       version,
