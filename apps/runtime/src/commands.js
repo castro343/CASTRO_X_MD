@@ -41,6 +41,7 @@ export function attachCommandHandlers({ socket, bot, getUptime = () => process.u
 
       const parsed = parseCommand(extractText(message), prefix);
       if (!parsed) continue;
+      if (bot.mode === "private" && jid.endsWith("@g.us")) continue;
 
       const command = commands.get(parsed.name);
       if (!command) continue;
