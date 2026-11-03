@@ -255,3 +255,77 @@ test("fails pairing promptly when WhatsApp closes before websocket readiness", a
   assert.equal(manager.sockets.has("bot-pair-close"), false);
   await manager.shutdown();
 });
+
+
+test("restores only sessions whose bot and owner still match", async () => {
+  const sessionRows = [
+    { bot_instance_id: "bot-a", owner_id: "owner-a", status: "connected", reconnect_enabled: true },
+    { bot_instance_id: "bot-b", owner_id: "owner-old", status: "connected", reconnect_enabled: true }
+  ];
+  const botRows = [
+    { id: "bot-a", owner_id: "owner-a", bot_name: "A", prefix: ".", mode: "public", settings: {} },
+    { id: "bot-b", owner_id: "owner-new", bot_name: "B", prefix: ".", mode: "public", settings: {} }
+  ];
+  let queryIndex = 0;
+  const supabase = {
+    from(table) {
+      assert.equal(table, queryIndex++ === 0 ? "bot_sessions" : "bot_instances");
+      const query = {
+        select() { return this; },
+        in() { return this; },
+        eq() { return this; },
+        then(resolve) {
+          resolve({ data: queryIndex === 1 ? sessionRows : botRows, error: null });
+        }
+      };
+      return query;
+    }
+  };
+  const manager = new WhatsAppSessionManager({
+    supabase, encryptionKey: "test-key", sessionDir: "/tmp/castro-x-md-restore-test"
+  });
+  const restoredIds = [];
+  manager.createSocket = async bot => { restoredIds.push(bot.id); return {}; };
+
+  const result = await manager.start();
+
+  assert.deepEqual(restoredIds, ["bot-a"]);
+  assert.deepEqual(result, { restored: 1 });
+});
+
+test("disconnect persists disabled automatic reconnect for only the selected bot", async () => {
+  const writes = [];
+  const supabase = {
+    from(table) {
+      return {
+        upsert: async row => { writes.push({ table, operation: "upsert", row }); return { error: null }; },
+        update(values) {
+          return {
+            eq(column, value) {
+              return {
+                eq: async (ownerColumn, ownerId) => {
+                  writes.push({ table, operation: "update", values, column, value, ownerColumn, ownerId });
+                  return { error: null };
+                }
+              };
+            }
+          };
+        }
+      };
+    }
+  };
+  const manager = new WhatsAppSessionManager({
+    supabase, encryptionKey: "test-key", sessionDir: "/tmp/castro-x-md-disconnect-test"
+  });
+  const bot = { id: "bot-a", owner_id: "owner-a" };
+  const result = await manager.disconnect(bot);
+
+  assert.deepEqual(result, { ok: true, status: "disconnected" });
+  assert.equal(writes[0].row.bot_instance_id, "bot-a");
+  assert.equal(writes[0].row.reconnect_enabled, false);
+  assert.equal(writes[1].column, "id");
+  assert.equal(writes[1].value, "bot-a");
+  assert.equal(writes[1].ownerColumn, "owner_id");
+  assert.equal(writes[1].ownerId, "owner-a");
+  assert.equal(writes[1].values.status, "disconnected");
+});
