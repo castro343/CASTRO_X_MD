@@ -43,7 +43,7 @@ test("menu documents the configured prefix and supported commands", async () => 
   ] });
   assert.match(app.sent[0][1].text, /Prefix: #/);
   assert.match(app.sent[0][1].text, /#runtime/);
-  assert.match(app.sent[0][1].text, /\\n/);
+  assert.match(app.sent[0][1].text, /\n/);
 });
 
 test("help is an alias for menu", async () => {
