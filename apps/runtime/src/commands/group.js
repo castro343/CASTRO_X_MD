@@ -5,7 +5,7 @@ function isGroupJid(jid) {
 }
 
 function clean(value, limit = 64) {
-  return String(value || "").replace(/[\\r\n]/g, " ").trim().slice(0, limit);
+  return String(value || "").replace(/[\r\n]/g, " ").trim().slice(0, limit);
 }
 
 function participants(metadata) {
