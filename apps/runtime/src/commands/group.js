@@ -3,7 +3,7 @@ function isGroupJid(jid) {
 }
 
 function clean(value, limit = 64) {
-  return String(value || "").replace(/[\\r\\n]/g, " ").trim().slice(0, limit);
+  return String(value || "").replace(/[\\r\n]/g, " ").trim().slice(0, limit);
 }
 
 function participants(metadata) {
@@ -70,7 +70,7 @@ export const groupCommands = [
         `│ Admins: ${list.filter(item => item.admin).length}`,
         `│ Created: ${metadata.creation ? new Date(metadata.creation * 1000).toLocaleDateString("en-GB") : "Unknown"}`,
         "╰─ CASTRO X MD"
-      ].join("\\n") };
+      ].join("\n") };
     }
   },
   {
@@ -81,7 +81,7 @@ export const groupCommands = [
       const metadata = await socket.groupMetadata(jid);
       const admins = participants(metadata).filter(item => item.admin);
       return { text: admins.length
-        ? [`👑 *GROUP ADMINS — ${clean(metadata.subject)}*`, ...admins.map((item, i) => `${i + 1}. @${String(item.id).split("@")[0].split(":")[0]}`)].join("\\n")
+        ? [`👑 *GROUP ADMINS — ${clean(metadata.subject)}*`, ...admins.map((item, i) => `${i + 1}. @${String(item.id).split("@")[0].split(":")[0]}`)].join("\n")
         : "No group administrators were returned by WhatsApp.",
         mentions: admins.map(item => item.id) };
     }
@@ -94,7 +94,7 @@ export const groupCommands = [
       const metadata = await requireAdmin(socket, jid, message);
       const members = participants(metadata);
       const note = clean(args.join(" "), 180);
-      return { text: `📢 *ATTENTION ALL MEMBERS*\\n${note ? note + "\\n\\n" : ""}${members.map(p => "@" + p.id.split("@")[0].split(":")[0]).join(" ")}`,
+      return { text: `📢 *ATTENTION ALL MEMBERS*\n${note ? note + "\n\n" : ""}${members.map(p => "@" + p.id.split("@")[0].split(":")[0]).join(" ")}`,
         mentions: members.map(p => p.id) };
     }
   },
