@@ -242,7 +242,7 @@ $("bot-list").addEventListener("click", async event => {
         <p class="muted">Enter the WhatsApp number for this bot. Use international format, including the country code.</p>
         <form data-pair-form class="pair-form">
           <label>WhatsApp phone number
-            <input name="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="+2547XXXXXXXX" pattern="\\+[1-9][0-9]{7,14}" required>
+            <input name="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="+2547XXXXXXXX" pattern="\+[1-9][0-9]{7,14}" required>
           </label>
           <div class="actions"><button class="primary" type="submit">Get pairing code</button><button class="outline" type="button" data-pair-cancel>Cancel</button></div>
           <p class="notice" data-pair-message role="status"></p>
