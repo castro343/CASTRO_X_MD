@@ -16,7 +16,7 @@ function normalizeWhatsAppPhone(value) {
   let digits = String(value || "").split("").filter(ch => ch >= "0" && ch <= "9").join("");
   if (digits.startsWith("00")) digits = digits.slice(2);
   if (!/^[1-9][0-9]{7,14}$/.test(digits)) throw new Error("Enter an international number with country code, e.g. 254758102401 or 447700900123.");
-  return digits;
+  return `+${digits}`;
 }
 function message(id, text = "") { $(id).textContent = text; }
 function escapeHtml(value = "") { return String(value).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
